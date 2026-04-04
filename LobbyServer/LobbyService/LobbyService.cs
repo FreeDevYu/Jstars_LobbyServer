@@ -47,28 +47,6 @@ namespace LobbyServer.LobbyService
             return new GearListResponse { Success = true, Gears = gearList };
         }
     }
-
-    public class CharacterListRequest
-    {
-       public long UID { get; set; }
-    }
-
-    public class CharacterListResponse
-    {
-        public List<Character> Characters { get; set; }
-        public bool Success { get; set; }
-    }
-
-    public class GearListRequest
-    {
-        public long characterID { get; set; }
-    }
-
-    public class GearListResponse
-    {
-        public List<Gear> Gears { get; set; }
-        public bool Success { get; set; }
-    }
 }
 
 //할일

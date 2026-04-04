@@ -1,5 +1,5 @@
 ﻿using LobbyAPI;
-using LobbyServer.Models;
+using LobbyAPI.Models;
 using LobbyServer.Repositories;
 using System.Text.Json;
 

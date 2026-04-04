@@ -1,4 +1,5 @@
-﻿using LobbyServer.LobbyService;
+﻿using LobbyAPI.Models;
+using LobbyServer.LobbyService;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LobbyServer.Properties

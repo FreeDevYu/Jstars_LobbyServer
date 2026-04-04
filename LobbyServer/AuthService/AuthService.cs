@@ -179,7 +179,7 @@ namespace LobbyServer.AuthService
                     return new LoginResponse { State = LoginResponse.ResultState.InvalidToken, Token = null };
                 }
 
-                return new LoginResponse { State = LoginResponse.ResultState.Success, UID = user.UID, Token = token };
+                return new LoginResponse { State = LoginResponse.ResultState.Success, User = UserSafeModel.FromUser(user), Token = token };
             }
             catch (Exception ex)
             {
@@ -217,83 +217,5 @@ namespace LobbyServer.AuthService
 
             return base64url;
         }
-    }
-
-    public class UsingIDRequest
-    {
-        public string ID { get; set; } = null!;
-    }
-
-    public class UsingIDResponse
-    {
-        public bool Success { get; set; }
-    }
-
-    public class EmailAuthRequest
-    {
-        public string Email { get; set; } = null!;
-    }
-
-    public class EmailAuthResponse
-    {
-        public bool Success { get; set; }
-    }
-
-    public class RegistRequest
-    {
-        public string ID { get; set; } = null!;
-        public string Password { get; set; } = null!;
-        public string Email { get; set; } = null!;
-        public string EmailAuthToken { get; set; } = null!;
-    }
-
-    public class RegistResponse
-    {
-        public enum ResultState
-        {
-            Success,
-            UsingID,
-            UsingEmail,
-            InvalidPassword,
-            InvalidEmailAuthToken,
-            Unknown
-        }
-
-        public ResultState State { get; set; }
-        public bool EmailTokenDeleted { get; set; } = false;
-    }
-
-    public class LoginRequest
-    {
-        public string ID { get; set; } = null!;
-        public string Password { get; set; } = null!;
-        public string DeviceID { get; set; } = null!;
-    }
-
-    public class LoginResponse
-    {
-        public enum ResultState
-        {
-            Success,
-            InvalidID,
-            InvalidPassowrd,
-            InvalidState,
-            InvalidToken,
-            Unknown
-        }
-
-        public ResultState State { get; set; }
-        public long UID { get; set; }
-        public string? Token { get; set; } // 로그인 성공 시 발급될 JWT
-    }
-
-    public class LogoutRequest
-    {
-        public string ID { get; set; }
-    }
-
-    public class LogoutResponse
-    {
-        public bool Success { get; set; }
     }
 }

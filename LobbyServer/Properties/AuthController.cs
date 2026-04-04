@@ -1,4 +1,5 @@
 ﻿using LobbyServer.AuthService;
+using LobbyServer.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LobbyServer.Properties

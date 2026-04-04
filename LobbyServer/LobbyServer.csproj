@@ -11,6 +11,7 @@
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="MailKit" Version="4.15.1" />
     <PackageReference Include="MySqlConnector" Version="2.5.0" />
+    <PackageReference Include="protobuf-net.AspNetCore" Version="3.2.52" />
     <PackageReference Include="SqlKata.Execution" Version="4.0.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.12.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />

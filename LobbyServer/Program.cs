@@ -12,6 +12,12 @@ using LobbyServer.LobbyService;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddControllers(options =>
+{
+    // 클라이언트의 Accept 헤더를 존중하겠다
+    options.RespectBrowserAcceptHeader = true;
+})
+.AddProtoBufNet();
 
 builder.Services.AddControllers();
 
