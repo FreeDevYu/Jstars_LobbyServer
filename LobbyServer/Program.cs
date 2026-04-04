@@ -36,6 +36,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHostedService<AuthEmailWorker>();
 
 
+builder.Services.AddScoped<ILobbyRespository, LobbyRespository>();
 builder.Services.AddScoped<ICharacterHelper, CharacterHelper>();
 builder.Services.AddScoped<IGearHelper, GearHelper>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();

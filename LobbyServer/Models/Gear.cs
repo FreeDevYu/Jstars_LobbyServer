@@ -1,10 +1,10 @@
 ﻿namespace LobbyServer.Models
 {
-    public class GearModel
+    public class Gear
     {
         public long InstanceID { get; set; }
         public GearType Type { get; set; }
-        public int TypeInstance { get; set; }
+        public GearInstanceType TypeInstance { get; set; }
         public int Enchant { get; set; }
         public bool IsEquipped { get; set; }
     }
@@ -17,16 +17,13 @@
         End
     }
 
-    public enum WeaponInstance
+    public enum GearInstanceType
     {
         Pistol = 1,
         Shotgun = 2,
         Sniper = 3,
-        MachineGun = 4
-    }
+        MachineGun = 4,
 
-    public enum AromrInstance
-    {
-        Dummy = 101,
+        DummyAromr = 101
     }
 }
