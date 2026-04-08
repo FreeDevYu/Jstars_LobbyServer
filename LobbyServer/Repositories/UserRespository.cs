@@ -1,7 +1,10 @@
 ﻿using Dapper;
+using LobbyAPI.Models;
 using LobbyServer.Models;
+using MySqlConnector;
 using SqlKata.Execution;
 using System.Data;
+
 
 namespace LobbyServer.Repositories
 {
@@ -10,7 +13,7 @@ namespace LobbyServer.Repositories
         //Task<User> GetByIdAsync(int uid);
         Task<User> GetByUserIDAsync(string id);
         Task<User> GetByEmailAsync(string email);
-        Task<int> CreateAsync(User user);
+        Task<long> CreateIDAsync(User user);
         Task<bool> UpdateAsync(User user);
         Task<bool> UpdateLastLoginAsync(long uid, DateTime loginTime);
     }
@@ -24,19 +27,12 @@ namespace LobbyServer.Repositories
             _db = db;
         }
 
-        // public async Task<User> GetByIdAsync(int uid)
-        // {
-        //     return await _db.Query("users")
-        //         .Where("uid", uid)
-        //         .FirstOrDefaultAsync<User>();
-        // }
-
         public async Task<User> GetByUserIDAsync(string id)
         {
             return await _db.Query("users")
                             .Where("id", id)
                             .Select(
-                                "uid AS Uid",
+                                "uid AS UID",
                                 "id AS ID",
                                 "email AS Email",
                                 "password_hash AS PasswordHash",
@@ -55,43 +51,43 @@ namespace LobbyServer.Repositories
                 .FirstOrDefaultAsync<User>();
         }
 
-        public async Task<int> CreateAsync(User user)
+        public async Task<long> CreateIDAsync(User user)
         {
             // 1. 프로시저의 IN 파라미터 이름(p_id, p_email 등)에 맞춰 익명 객체 생성
             var parameters = new
             {
-                p_id = user.ID,
-                p_email = user.Email,
-                p_password_hash = user.PasswordHash,
-                p_salt = user.Salt,
-                p_nickname = user.NickName
+                input_id = user.ID,
+                input_email = user.Email,
+                input_password_hash = user.PasswordHash,
+                input_salt = user.Salt,
             };
 
-            // 2. 프로시저 호출
-            // 프로시저 마지막에 'SELECT @new_uid AS new_uid;' 로 값을 반환하므로 
-            // QuerySingleAsync<int>를 사용하여 결과값을 바로 받아옵니다.
-            int uid = await _db.Connection.QuerySingleAsync<int>(
-                "CreateAccount",
-                parameters,
-                commandType: CommandType.StoredProcedure
-            );
+            try
+            {
+                // 1. 정상적으로 생성이 완료되면 생성된 uid를 반환합니다.
+                long uid = await _db.Connection.QuerySingleAsync<long>(
+                    "CreateAccount",
+                    parameters,
+                    commandType: CommandType.StoredProcedure
+                );
 
-            return uid;
+                return uid;
+            }
+            catch (MySqlException ex)
+            {
+                // 2. MySQL 에러 번호 1062는 'Unique 제약조건 위배(중복)'를 의미합니다.
+                if (ex.Number == 1062)
+                {
+                    // 중복된 ID (또는 이메일)로 인해 DB가 저장을 거부함
+                    // 호출한 쪽에서 "아, 중복이구나"라고 알 수 있도록 에러 코드(예: -1)를 반환합니다.
+                    return -1;
+                }
 
-            //  int uid =  await _db.Query("users").InsertGetIdAsync<int>(new
-            //  {
-            //      //uid = user.UID, -> 자동생성
-            //      id = user.ID,
-            //      email = user.Email,
-            //      password_hash = user.PasswordHash,
-            //      salt = user.Salt,
-            //      created_at = user.CreatedAt,
-            //      last_login_at = user.LastLoginAt,
-            //      status = user.Status
-            //      // last_login_at은 여기서 DB에 NULL이 들어갑니다 (컬럼이 NULL 허용)
-            //  });
-            //
-            //  return uid;
+                // 3. 중복이 아닌 다른 치명적인 DB 에러 (네트워크 끊김, 쿼리 문법 에러 등)
+                // 이런 에러는 보통 서버 로그에 상세히 기록(로깅)하고 예외를 다시 던집니다.
+                // _logger.LogError(ex, "DB 계정 생성 중 예기치 못한 에러 발생");
+                return -1;
+            }
         }
 
         public async Task<bool> UpdateAsync(User user)

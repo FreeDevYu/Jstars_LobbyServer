@@ -11,7 +11,8 @@ namespace LobbyServer
             var request = context.HttpContext.Request;
 
             // 1. 헤더에서 토큰과 UID 추출
-            string token = request.Headers["Authorization"].ToString().Replace("Bearer ", "").Trim();
+            // 서버 측 안전한 헤더 추출 예시
+            string token = request.Headers["Authorization"].ToString()?.Replace("Bearer ", "").Trim() ?? string.Empty;
             string id = request.Headers["ID"].ToString();
             string deviceID = request.Headers["DeviceID"].ToString();
 
@@ -21,7 +22,7 @@ namespace LobbyServer
                 context.Result = new UnauthorizedObjectResult(new { Success = false, Message = "인증 정보가 누락되었습니다." });
                 return; // 여기서 리턴하면 컨트롤러로 안 넘어감!
             }
-
+           
             // 3. DI 컨테이너에서 IAuthTokenHelper 가져오기
             var authTokenHelper = context.HttpContext.RequestServices.GetRequiredService<IAuthTokenHelper>();
 

@@ -20,7 +20,7 @@ namespace LobbyServer.Properties
         {
             var result = await _authService.UsingIDCheckAsync(request);
 
-            if (!result.Success) return BadRequest(result);
+            //if (!result.Success) return BadRequest(result);
 
             return Ok(result);
         }
@@ -30,38 +30,29 @@ namespace LobbyServer.Properties
         {
             var result = await _authService.EmailAuthAsync(request);
 
-            if (!result.Success) return BadRequest(result);
-
             return Ok(result);
         }
 
-        [HttpPost("register")]
+        [HttpPost("Register")]
         public async Task<IActionResult> Register([FromBody] RegistRequest request)
         {
             var result = await _authService.RegisterAsync(request);
-
-            if (result.State != RegistResponse.ResultState.Success) return BadRequest(result);
-
             return Ok(result);
         }
 
-        [HttpPost("login")]
+        [HttpPost("Login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _authService.LoginAsync(request);
-
-            if (result.State != LoginResponse.ResultState.Success) return Unauthorized(result);
 
             return Ok(result);
         }
 
         [RedisAuthorize]
-        [HttpPost("logout")]
+        [HttpPost("Logout")]
         public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
         {
             var result = await _authService.LogoutAsync(request);
-
-            if (!result.Success) return Unauthorized(result);
 
             return Ok(result);
         }

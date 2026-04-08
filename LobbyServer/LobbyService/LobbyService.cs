@@ -7,18 +7,20 @@ namespace LobbyServer.LobbyService
     public interface ILobbyService
     {
         Task<CharacterListResponse> GetCharactersAsync(CharacterListRequest request);
-        Task<GearListResponse> GetGearsAsync(GearListRequest request);
+        Task<InventoryListResponse> GetInventoryListAsync(InventoryListRequest request);
+        Task<EquipResponse> EquipAsync(EquipRequest request);
+        Task<NicknameChangeResponse> NicknameChangeAsync(NicknameChangeRequest request);
     }
 
     public class LobbyService : ILobbyService
     {
         private readonly ICharacterHelper _characterHelper;
-        private readonly IGearHelper _gearHelper;
+        private readonly IInventoryHelper _inventoryHelper;
 
-        public LobbyService(ICharacterHelper characterHelper, IGearHelper gearHelper)
+        public LobbyService(ICharacterHelper characterHelper, IInventoryHelper inventoryHelper)
         {
             _characterHelper = characterHelper;
-            _gearHelper = gearHelper;
+            _inventoryHelper = inventoryHelper;
         }
 
         public async Task<CharacterListResponse> GetCharactersAsync(CharacterListRequest request)
@@ -35,16 +37,37 @@ namespace LobbyServer.LobbyService
             return new CharacterListResponse { Success = true, Characters = characterList };
         }
 
-        public async Task<GearListResponse> GetGearsAsync(GearListRequest request)
+        public async Task<InventoryListResponse> GetInventoryListAsync(InventoryListRequest request)
         {
-            long characterID = request.characterID;
-            var gearList = await _gearHelper.GetAllGearsByUIDAsync(characterID);
-            if (gearList == null || gearList.Count() < 1)
+            long uid = request.UID;
+
+            var inventory = await _inventoryHelper.GetInventoryListByUIDAsync(uid);
+            if (inventory == null || inventory.Count() < 1)
             {
-                return new GearListResponse { Success = false, Gears = new List<Gear>() };
+                return new InventoryListResponse { Success = false, Items = new List<Item>() };
             }
 
-            return new GearListResponse { Success = true, Gears = gearList };
+            return new InventoryListResponse { Success = true, Items = inventory };
+        }
+
+        //[Write-Back]
+        public async Task<EquipResponse> EquipAsync(EquipRequest request)
+        {
+            long uid = request.UID;
+            long itemInstanceID = request.ItemInstanceID;
+
+            (bool success, long equipped, long unequipped) result = await _inventoryHelper.EquipItem(uid, itemInstanceID);
+
+
+            return new EquipResponse { Success = result.success, EquipItemID = result.equipped, UnEquipItemID = result.unequipped };
+        }
+
+        public async Task<NicknameChangeResponse> NicknameChangeAsync(NicknameChangeRequest request)
+        {
+            NicknameChangeResult result = NicknameChangeResult.None;
+            result = await _inventoryHelper.ChangeNickname(request.UID, request.NewNickname, request.ItemInstanceID);
+
+            return new NicknameChangeResponse { Result = result };
         }
     }
 }

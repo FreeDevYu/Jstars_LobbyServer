@@ -1,7 +1,10 @@
 ﻿using LobbyServer.Models;
 using LobbyServer.Repositories;
 using MySqlConnector;
+using StackExchange.Redis;
 using System.Security.Cryptography;
+using System.Text.Json;
+using static LobbyServer.AuthService.IEmailAuthHelper;
 
 
 namespace LobbyServer.AuthService
@@ -122,7 +125,7 @@ namespace LobbyServer.AuthService
                 };
 
                 // 데이터베이스에 저장
-                int userId = await _userRepository.CreateAsync(newUser);
+                long userId = await _userRepository.CreateIDAsync(newUser);
 
                 return new RegistResponse { State = RegistResponse.ResultState.Success };
             }
@@ -169,7 +172,7 @@ namespace LobbyServer.AuthService
 
                 // 마지막 로그인 시간 업데이트
                 await _userRepository.UpdateLastLoginAsync(user.UID, DateTime.UtcNow);
-
+               
                 // 인증 토큰 생성
                 var tokenString = GenerateUniqueToken();
                 var token = await _authTokenHelper.CreateTokenAsync(user, devideID, tokenString);
