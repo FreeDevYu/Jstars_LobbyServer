@@ -50,5 +50,19 @@ namespace LobbyServer.Properties
 
             return Ok(result);
         }
+
+        [HttpPost("RequestRegistMatching")]
+        public async Task<IActionResult> Enqueue([FromBody] EnqueueMatchingRequest req)
+        {
+            var result = await _lobbyService.EnqueueMatchingAsync(req);
+            return Ok(result);
+        }
+
+        [HttpPost("RequestCancelMatching")]
+        public async Task<IActionResult> Cancel([FromBody] CancelMatchingRequest req)
+        {
+            var result = await _lobbyService.CancelMatchingAsync(req);
+            return Ok(result);
+        }
     }
 }

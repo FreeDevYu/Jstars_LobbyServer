@@ -8,6 +8,7 @@ namespace LobbyServer.Repositories
 {
     public interface ILobbyRespository
     {
+        Task<PvpRecord?> GetPvpRecordByUIDAsync(long uid);
         Task<IEnumerable<Character>> GetAllCharactersByUIDAsync(long uid);
         Task<IEnumerable<Item>> GetInventoryListByUIDAsync(long uid);
         Task<bool> EquipAsync(long uid, long itemID);
@@ -33,6 +34,18 @@ namespace LobbyServer.Repositories
                         "exp AS Exp"
                     )
                     .GetAsync<Character>();
+        }
+
+        public async Task<PvpRecord?> GetPvpRecordByUIDAsync(long uid)
+        {
+            return await _db.Query("match_records")
+                 .Where("uid", uid)
+                 .Select(
+                     "uid AS UID",
+                     "pvp_win_count AS Win",
+                     "pvp_play_count AS Total"
+                 )
+                 .FirstOrDefaultAsync<PvpRecord>();
         }
 
         public async Task<IEnumerable<Item>> GetInventoryListByUIDAsync(long uid)

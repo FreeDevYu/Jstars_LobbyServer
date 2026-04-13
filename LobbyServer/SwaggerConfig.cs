@@ -10,18 +10,15 @@ namespace LobbyServer
         {
             operation.Parameters ??= new List<IOpenApiParameter>();
 
-            // [첫 번째 헤더 입력창]: 유저 ID
-            // 주의: 미들웨어의 request.Headers["ID"] 와 이름을 똑같이 맞췄습니다.
             operation.Parameters.Add(new OpenApiParameter
             {
                 Name = "ID",
                 In = ParameterLocation.Header,
-                Required = false, // 필수 여부 (테스트 편의를 위해 일단 false)
+                Required = true,//필수여부
                 Description = "유저 ID",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
 
-            // 💡 [두 번째 헤더 입력창]: DeviceID 추가!
             operation.Parameters.Add(new OpenApiParameter
             {
                 Name = "DeviceID",

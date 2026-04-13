@@ -8,6 +8,7 @@ using SqlKata.Execution;
 using StackExchange.Redis;
 using LobbyServer.BackgroundServices;
 using LobbyServer.LobbyService;
+using LobbyServer.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,13 +46,28 @@ builder.Services.AddHostedService<AuthEmailWorker>();
 builder.Services.AddScoped<ILobbyRespository, LobbyRespository>();
 builder.Services.AddScoped<ICharacterHelper, CharacterHelper>();
 builder.Services.AddScoped<IInventoryHelper, InventoryHelper>();
+builder.Services.AddScoped<IMatchingHelper, MatchingHelper>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();
-
+builder.Services.AddHostedService<MatchingRequestWorker>();
+builder.Services.AddHostedService<MatchResponseWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerConfiguration();
 
+
+// SignalR 기능 활성화
+builder.Services.AddSignalR();
+
 var app = builder.Build();
+// 1. CORS 설정 (유니티 클라이언트 접속 허용)
+app.UseCors(policy => policy
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()
+    .SetIsOriginAllowed(_ => true)); // 로컬 테스트용
+
+app.UseRouting();
+
 
 if (app.Environment.IsDevelopment())
 {
@@ -63,6 +79,7 @@ app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
+app.MapHub<SignalRHub>("/signalRHub");
 app.MapControllers();
 
 app.Run();

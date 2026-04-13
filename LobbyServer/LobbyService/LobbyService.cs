@@ -10,17 +10,21 @@ namespace LobbyServer.LobbyService
         Task<InventoryListResponse> GetInventoryListAsync(InventoryListRequest request);
         Task<EquipResponse> EquipAsync(EquipRequest request);
         Task<NicknameChangeResponse> NicknameChangeAsync(NicknameChangeRequest request);
+        Task<EnqueueMatchingResponse> EnqueueMatchingAsync(EnqueueMatchingRequest request);
+        Task<CancelMatchingResponse> CancelMatchingAsync(CancelMatchingRequest request);
     }
 
     public class LobbyService : ILobbyService
     {
         private readonly ICharacterHelper _characterHelper;
         private readonly IInventoryHelper _inventoryHelper;
+        private readonly IMatchingHelper _matchigHelper;
 
-        public LobbyService(ICharacterHelper characterHelper, IInventoryHelper inventoryHelper)
+        public LobbyService(ICharacterHelper characterHelper, IInventoryHelper inventoryHelper, IMatchingHelper matchigHelper)
         {
             _characterHelper = characterHelper;
             _inventoryHelper = inventoryHelper;
+            _matchigHelper = matchigHelper;
         }
 
         public async Task<CharacterListResponse> GetCharactersAsync(CharacterListRequest request)
@@ -68,6 +72,18 @@ namespace LobbyServer.LobbyService
             result = await _inventoryHelper.ChangeNickname(request.UID, request.NewNickname, request.ItemInstanceID);
 
             return new NicknameChangeResponse { Result = result };
+        }
+
+        public async Task<EnqueueMatchingResponse> EnqueueMatchingAsync(EnqueueMatchingRequest request)
+        {
+            bool success = await _matchigHelper.EnqueueMatchingQueue(request.UID);
+            return new EnqueueMatchingResponse { Success = success };
+        }
+
+        public async Task<CancelMatchingResponse> CancelMatchingAsync(CancelMatchingRequest request)
+        {
+            await _matchigHelper.CancelMatchingQueue(request.UID);
+            return new CancelMatchingResponse { Success = false };
         }
     }
 }

@@ -86,6 +86,17 @@ namespace LobbyAPI.Models
     }
 
     [ProtoContract]
+    public class PvpRecord
+    {
+        [ProtoMember(1)]
+        public long UID { get; set; }
+        [ProtoMember(2)]
+        public int Win { get; set; }
+        [ProtoMember(3)]
+        public int Total { get; set; }
+    }
+
+    [ProtoContract]
     public class Item
     {
         [ProtoMember(1)]
@@ -135,5 +146,58 @@ namespace LobbyAPI.Models
         FormatFail = 2,
         DuplicateFail = 3,
         NoCoupon = 4
+    }
+
+    [ProtoContract]
+    public class EnqueueMatchingRequest
+    {
+        [ProtoMember(1)]
+        public long UID { get; set; }
+    }
+
+    [ProtoContract]
+    public class EnqueueMatchingResponse
+    {
+        [ProtoMember(1)]
+        public bool Success { get; set; }
+    }
+
+    [ProtoContract]
+    public class CancelMatchingRequest
+    {
+        [ProtoMember(1)]
+        public long UID { get; set; }
+    }
+
+    [ProtoContract]
+    public class CancelMatchingResponse
+    {
+        [ProtoMember(1)]
+        public bool Success { get; set; }
+    }
+
+    [ProtoContract]
+    public class FieldServerInfo
+    {
+        [ProtoMember(1)]
+        public string Name { get; set; }
+    }
+
+    [ProtoContract]
+    public class GameRoomCreateDTO
+    {
+        [ProtoMember(1)]
+        public List<long> UIDList { get; set; }
+    }
+
+    [ProtoContract]
+    public class GameRoomCreateResponse
+    {
+        [ProtoMember(1)]
+        public string Ip { get; set; }
+        [ProtoMember(2)]
+        public int Port { get; set; }
+        [ProtoMember(3)]
+        public List<long> UIDList { get; set; }
     }
 }

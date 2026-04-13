@@ -5,9 +5,18 @@ namespace LobbyAPI
     public interface IRedisHelper
     {
         Task<bool> SetKeyValueAsync(string key, string value, TimeSpan? expiry = null);
-        Task<long> EnqueueKeyValueAsync(string key, string value);
+        Task<bool> DeleteKeyAsync(string key);
+        Task<long> DeleteKeysAsync(params string[] keys);
         Task<string> GetValueAsync(string key);
 
+
+        ///////////////
+        ///
+        Task<long> EnqueueKeyValueAsync(string key, string value);
+        Task<long> EnqueueKeyValueAsync(string key, byte[] value);
+
+        ///////////////
+        
         Task<bool> SetHashFieldsAsync(string key, Dictionary<string, string> fields, TimeSpan? expiry = null);
         Task<long> DeleteHashFieldsAsync(string key, params string[] fields);
         Task<bool> DeleteHashFieldAsync(string key, string field);
@@ -16,10 +25,16 @@ namespace LobbyAPI
         Task<Dictionary<string, string>> GetAllHashFieldsAsync(string key);
         Task<long> IncrementHashFieldAsync(string key, string field, long value = 1);
 
-        Task<bool> RemoveDataByKeyAsync(string key);
+        ///////////////
 
         Task<bool> AcquireLockAsync(string key, string token, TimeSpan expiry);
         Task<bool> ReleaseLockAsync(string key, string token);
+
+        ///////////////
+        ///
+        Task<RedisValue[]> GetZSetRangeAsync(string key, long start = 0, long stop = 0, Order order = Order.Ascending);
+        Task<bool> AddZSetAsync(string key, RedisValue value, double score);
+        Task<bool> RemoveZSetAsync(string key, RedisValue value);
     }
 
     public class RedisHelper : IRedisHelper
@@ -45,12 +60,24 @@ namespace LobbyAPI
             }
         }
 
-        // Redis List의 오른쪽에 데이터 삽입 (RPUSH)
-        // O(1)의 속도로 매우 빠르게 삽입됩니다.
-        public async Task<long> EnqueueKeyValueAsync(string key, string value)
+        // 단일 키 삭제 
+        public async Task<bool> DeleteKeyAsync(string key)
         {
-            long currentQueueCount = await _redis.ListRightPushAsync(key, value);
-            return currentQueueCount;
+            // 반환값: 키가 존재해서 성공적으로 지웠다면 true, 애초에 없는 키였다면 false 반환
+            return await _redis.KeyDeleteAsync(key);
+        }
+
+        // 여러 키를 한 번에 삭제 (params 키워드 활용)
+        public async Task<long> DeleteKeysAsync(params string[] keys)
+        {
+            if (keys == null || keys.Length == 0)
+                return 0;
+
+            // string 배열을 StackExchange.Redis가 요구하는 RedisKey 배열로 변환
+            var redisKeys = keys.Select(k => (RedisKey)k).ToArray();
+
+            // 반환값: 실제로 삭제에 성공한 키의 개수 반환
+            return await _redis.KeyDeleteAsync(redisKeys);
         }
 
         public async Task<string> GetValueAsync(string key)
@@ -68,6 +95,21 @@ namespace LobbyAPI
             }
 
             return result.ToString();
+        }
+
+        // Redis List의 오른쪽에 데이터 삽입 (RPUSH)
+        // O(1)의 속도로 매우 빠르게 삽입됩니다.
+        public async Task<long> EnqueueKeyValueAsync(string key, string value)
+        {
+            long currentQueueCount = await _redis.ListRightPushAsync(key, value);
+            return currentQueueCount;
+        }
+
+        public async Task<long> EnqueueKeyValueAsync(string key, byte[] value)
+        {
+            long currentQueueCount = await _redis.ListRightPushAsync(key, value);
+
+            return currentQueueCount;
         }
 
         public async Task<bool> SetHashFieldsAsync(string key, Dictionary<string, string> fields, TimeSpan? expiry = null)
@@ -110,11 +152,6 @@ namespace LobbyAPI
             return await _redis.HashIncrementAsync(key, field, value);
         }
 
-        public async Task<bool> RemoveDataByKeyAsync(string key)
-        {
-            bool success = await _redis.KeyDeleteAsync(key);
-            return success;
-        }
 
         // 여러 개의 필드를 한 번에 삭제하는 함수 (params 키워드 활용)
         public async Task<long> DeleteHashFieldsAsync(string key, params string[] fields)
@@ -138,6 +175,7 @@ namespace LobbyAPI
             return await _redis.HashDeleteAsync(key, field);
         }
 
+
         public async Task<bool> AcquireLockAsync(string key, string token, TimeSpan expiry)
         {
             // LockTakeAsync는 Key가 존재하지 않을 때만 생성하고(NX), 만료시간을 설정하며,
@@ -150,6 +188,34 @@ namespace LobbyAPI
             // LockReleaseAsync는 내부적으로 Lua 스크립트를 사용하여,
             // "해당 키의 Value가 내가 넘긴 Token과 일치할 때만 삭제(DEL)"하도록 안전하게 처리합니다.
             return await _redis.LockReleaseAsync(key, token);
+        }
+
+        public async Task<bool> AddZSetAsync(string key, RedisValue value, double score)
+        {
+            // RedisValue를 사용했으므로 value 자리에 long uid를 그대로 넣어도 알아서 처리됩니다!
+            // 반환값: 신규 추가 시 true, 기존 값의 score만 업데이트 시 false 반환
+            return await _redis.SortedSetAddAsync(key, value, score);
+        }
+
+        // [2] ZSET 삭제 (매칭 취소 등)
+        public async Task<bool> RemoveZSetAsync(string key, RedisValue value)
+        {
+            // 반환값: 실제로 지웠으면 true, 큐에 없는 데이터였으면 false 반환
+            return await _redis.SortedSetRemoveAsync(key, value);
+        }
+
+        public async Task<RedisValue[]> GetZSetRangeAsync(string key, long start = 0, long stop = 0, Order order = Order.Ascending)
+        {
+            // RangeByRank는 결과를 배열로 반환하며, 결과가 없으면 빈 배열(Length=0)을 반환합니다.
+            var result = await _redis.SortedSetRangeByRankAsync(key, start, stop, order);
+
+            // null보다는 빈 배열이나 null을 명확히 처리하는 것이 좋습니다.
+            if (result.Length == 0)
+            {
+                return Array.Empty<RedisValue>();
+            }
+
+            return result;
         }
     }
 }

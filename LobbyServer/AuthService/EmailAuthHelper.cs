@@ -76,7 +76,7 @@ namespace LobbyServer.AuthService
             {
                 if (savedRetryCount >= EmailTokenRetryCount)
                 {
-                    await _redisHelper.RemoveDataByKeyAsync(redisKey);
+                    await _redisHelper.DeleteKeyAsync(redisKey);
                     return Result.Deleted;
                 }
 

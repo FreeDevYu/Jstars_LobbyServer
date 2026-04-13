@@ -86,7 +86,7 @@ namespace LobbyServer.AuthService
         public async Task<bool> RevokeTokenAsync(string id)
         {
             string redisKey = $"auth:token:{id}";
-            bool deleted = await _redisHelper.RemoveDataByKeyAsync(redisKey);
+            bool deleted = await _redisHelper.DeleteKeyAsync(redisKey);
             return deleted;
         }
     }
