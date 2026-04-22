@@ -186,7 +186,7 @@ namespace LobbyServer.AuthService
             }
             catch (Exception ex)
             {
-                // _logger.LogError(ex, "로그인 중 오류 발생. Username: {Username}", username);
+                //_logger.LogError(ex, "로그인 중 오류 발생. Username: {Username}", username);
                 return new LoginResponse { State = LoginResponse.ResultState.Unknown, Token = null };
             }
         }

@@ -5,9 +5,11 @@ namespace LobbyAPI
     public interface IRedisHelper
     {
         Task<bool> SetKeyValueAsync(string key, string value, TimeSpan? expiry = null);
+        Task<bool> SetKeyValueAsync(string key, byte[] value, TimeSpan? expiry = null);
         Task<bool> DeleteKeyAsync(string key);
         Task<long> DeleteKeysAsync(params string[] keys);
         Task<string> GetValueAsync(string key);
+        Task<byte[]?> GetBinaryValueAsync(string key);
 
 
         ///////////////
@@ -60,6 +62,18 @@ namespace LobbyAPI
             }
         }
 
+        public async Task<bool> SetKeyValueAsync(string key, byte[] value, TimeSpan? expiry = null)
+        {
+            if (expiry.HasValue)
+            {
+                return await _redis.StringSetAsync(key, value, expiry.Value);
+            }
+            else
+            {
+                return await _redis.StringSetAsync(key, value);// 영구 저장
+            }
+        }
+
         // 단일 키 삭제 
         public async Task<bool> DeleteKeyAsync(string key)
         {
@@ -95,6 +109,20 @@ namespace LobbyAPI
             }
 
             return result.ToString();
+        }
+
+        public async Task<byte[]?> GetBinaryValueAsync(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+
+            RedisValue result = await _redis.StringGetAsync(key);
+
+            if (!result.HasValue)
+            {
+                return null;
+            }
+
+            return result;
         }
 
         // Redis List의 오른쪽에 데이터 삽입 (RPUSH)

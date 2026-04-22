@@ -2,6 +2,7 @@
 using LobbyServer.Hubs; 
 using Microsoft.AspNetCore.SignalR;
 using ProtoBuf;
+using Protocol;
 using StackExchange.Redis;
 
 
@@ -38,36 +39,31 @@ namespace LobbyServer.BackgroundServices
             {
                 try
                 {
-                    // c++ field server에서는 바이너리 데이터 Protobuf 객체로 저장되어있음.
-                    GameRoomCreateResponse responseDto;
-                    using (var ms = new MemoryStream((byte[])message))
-                    {
-                        responseDto = Serializer.Deserialize<GameRoomCreateResponse>(ms);
-                    }
-                    _logger.LogInformation($"[방 생성 완료 수신] IP: {responseDto.Ip}, Port: {responseDto.Port}, 인원: {responseDto.UIDList.Count}명");
+                    GameRoomCreateResponse responseDto = GameRoomCreateResponse.Parser.ParseFrom((byte[])message);
 
-                    // 2. 방에 배정된 유저들에게 SignalR로 응답 전송
-                    foreach (var uid in responseDto.UIDList)
+                    _logger.LogInformation($"[방 생성 완료 수신] IP: {responseDto.Ip}, Port: {responseDto.Port}, 인원: {responseDto.Uids.Count}명");
+
+                    // 병렬 처리를 위한 개선 코드
+                    var sendTasks = responseDto.Uids.Select(async uid =>
                     {
-                        // 유저의 고유 ConnectionId 조회
                         var connectionId = await db.StringGetAsync($"SignalRConn:{uid}");
-
                         if (!connectionId.IsNullOrEmpty)
                         {
-                            // 클라이언트의 'MatchSuccess' 콜백 함수 호출 및 접속 정보 전달
                             await _hubContext.Clients.Client(connectionId).SendAsync("MatchSuccess", new
                             {
                                 Ip = responseDto.Ip,
                                 Port = responseDto.Port
                             });
-
                             _logger.LogInformation($"[SignalR 발송 완료] UID: {uid} -> {connectionId}");
                         }
                         else
                         {
-                            _logger.LogWarning($"[SignalR 발송 실패] UID: {uid}의 ConnectionId를 찾을 수 없습니다. (매칭 중 접속 종료 의심)");
+                            _logger.LogWarning($"[SignalR 발송 실패] UID: {uid}의 ConnectionId를 찾을 수 없습니다.");
                         }
-                    }
+                    });
+
+                    // 모든 유저에게 동시에 비동기로 발송
+                    await Task.WhenAll(sendTasks);
                 }
                 catch (Exception ex)
                 {
@@ -76,7 +72,6 @@ namespace LobbyServer.BackgroundServices
                 }
             });
 
-            // 💡 중요: 이벤트 기반(구독) 워커이므로 while 루프 없이 Task.Delay로 프로세스만 무한 대기시킵니다.
             try
             {
                 await Task.Delay(Timeout.Infinite, stoppingToken);

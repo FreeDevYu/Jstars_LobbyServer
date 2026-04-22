@@ -182,22 +182,4 @@ namespace LobbyAPI.Models
         [ProtoMember(1)]
         public string Name { get; set; }
     }
-
-    [ProtoContract]
-    public class GameRoomCreateDTO
-    {
-        [ProtoMember(1)]
-        public List<long> UIDList { get; set; }
-    }
-
-    [ProtoContract]
-    public class GameRoomCreateResponse
-    {
-        [ProtoMember(1)]
-        public string Ip { get; set; }
-        [ProtoMember(2)]
-        public int Port { get; set; }
-        [ProtoMember(3)]
-        public List<long> UIDList { get; set; }
-    }
 }

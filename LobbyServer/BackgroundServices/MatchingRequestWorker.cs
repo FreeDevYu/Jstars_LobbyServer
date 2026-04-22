@@ -14,7 +14,7 @@ namespace LobbyServer.BackgroundServices
 
         private const string QueueKey = "MatchingQueue_ZSET";
         private const double MATCH_RANGE = 5.0; // 승률 오차범위 ±5% 이내 매칭
-        private const int MATCH_USER_COUNT = 2;
+        private const int MATCH_USER_COUNT = 1;
 
         // Lua 스크립트 캐싱 객체
         private readonly LuaScript _matchingScript;
@@ -101,7 +101,6 @@ namespace LobbyServer.BackgroundServices
                             {
                                 _logger.LogInformation($"[매칭 성사] UID: {string.Join(", ", matchedUids)}");
                             }
-                            _logger.LogInformation($"[매칭 성사] UID: {string.Join(", ", matchedUids)}");
                         }
                     }
                     else

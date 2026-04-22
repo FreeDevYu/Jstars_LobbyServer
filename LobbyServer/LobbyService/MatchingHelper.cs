@@ -1,9 +1,7 @@
 ﻿using LobbyAPI;
 using LobbyAPI.Models;
-using LobbyServer.AuthService;
-using LobbyServer.Hubs;
 using LobbyServer.Repositories;
-using ProtoBuf;
+using Google.Protobuf;
 using StackExchange.Redis;
 using System.Text.Json;
 
@@ -22,7 +20,6 @@ namespace LobbyServer.LobbyService
         private readonly IRedisHelper _redisHelper;
         private readonly string _key = "MatchingQueue_ZSET";
         private readonly string _fieldServerCurrentKey = "FIELD_SERVER_CURRENT_USER";
-        private readonly string _fieldServerInfoey = "FIELD_SERVER_INFO";
 
 
         public MatchingHelper(IRedisHelper redisHelper, ILobbyRespository lobbyRespository)
@@ -71,37 +68,29 @@ namespace LobbyServer.LobbyService
 
         public async Task<bool> CreateRoomAsync(List<long> uidList)
         {
-            bool success = false;
-            //오름차순(ASC)이므로 0번 인덱스가 가장인원이 적은 서버
-            RedisValue[] serverList = await _redisHelper.GetZSetRangeAsync(_fieldServerCurrentKey, start : 0, stop : 0, order : Order.Ascending);
+            // 1. 가장 인원이 적은 서버 찾기
+            RedisValue[] serverList = await _redisHelper.GetZSetRangeAsync(
+                _fieldServerCurrentKey, start: 0, stop: 0, order: Order.Ascending);
+
             if (serverList.Length < 1)
-                return success;
+                return false;
 
-            string jsonValue = await _redisHelper.GetHashFieldAsync(_fieldServerInfoey, serverList[0].ToString());
-            if (jsonValue == null || jsonValue == string.Empty)
-                return success;
+            string targetServerName = serverList[0].ToString();
 
-            var serverInfo = JsonSerializer.Deserialize<FieldServerInfo>(jsonValue);
-            if(serverInfo == null) 
-                return success;
+            // 2. DTO 생성 및 데이터 세팅 (Google.Protobuf 방식)
+            Protocol.GameRoomCreateDTO dto = new Protocol.GameRoomCreateDTO();
 
-            GameRoomCreateDTO dto = new GameRoomCreateDTO();
-            dto.UIDList = uidList;
-            byte[] protoBytes;
+            // LINQ를 사용해 long을 ulong으로 캐스팅하며 AddRange로 추가합니다.
+            dto.UIDList.AddRange(uidList.Select(uid => (ulong)uid));
 
-            using (var ms = new MemoryStream())
-            {
-                // Protobuf-net을 사용하여 바이너리로 변환
-                Serializer.Serialize(ms, dto);
-                protoBytes = ms.ToArray();
-            }
+            // 3. 직렬화 (MemoryStream 없이 초간단하게 변환!)
+            byte[] protoBytes = dto.ToByteArray();
 
-            string redisKey = $"MatchingQueue:{serverInfo.Name}";
-
+            // 4. Redis 큐에 넣기
+            string redisKey = $"MatchingQueue:{targetServerName}";
             long count = await _redisHelper.EnqueueKeyValueAsync(redisKey, protoBytes);
-            //-> 이 dto를 체크한 iocp필드서버가 signalRHub로 방생성완료 패킷 보낼예정. 
 
-            return success;
+            return count > 0;
         }
     }
 }

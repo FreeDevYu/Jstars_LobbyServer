@@ -29,7 +29,7 @@ namespace LobbyServer
             // 4. Redis 검증 로직 실행!
             var authToken = await authTokenHelper.GetTokenAsync(id, token);
 
-            if (authToken == null || authToken.DeviceID != deviceID)
+            if (authToken == null || authToken.DeviceId != deviceID)
             {
                 // 토큰이 틀렸거나, 만료됐거나, 다른 기기에서 로그인해서 밀려난 경우 차단
                 context.Result = new UnauthorizedObjectResult(new { Success = false, Message = "유효하지 않거나 만료된 세션입니다." });

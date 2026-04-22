@@ -1,6 +1,10 @@
-﻿using LobbyAPI;
-using LobbyServer.Models;
-using System.Text.Json;
+﻿using Google.Protobuf;
+using LobbyAPI;
+using LobbyServer.Models; // AuthTokenDTO가 있는 네임스페이스
+using ProtoBuf;           // protobuf-net 라이브러리 추가
+using System;
+using System.IO;          // MemoryStream 사용을 위해 추가
+using System.Threading.Tasks;
 
 namespace LobbyServer.AuthService
 {
@@ -8,14 +12,10 @@ namespace LobbyServer.AuthService
     {
         Task<string?> CreateTokenAsync(User user, string deviceId, string tokenString);
         Task<bool> RevokeTokenAsync(string id);
-        Task<AuthToken?> GetTokenAsync(string id, string clientToken);
-
-        //Task<AuthToken> GetTokenAsync(string token);
-        //Task<bool> ValidateTokenAsync(string token);
-        //Task<bool> RevokeTokenAsync(string token);
-        //Task<IEnumerable<AuthToken>> GetUserTokensAsync(int userId);
-        //Task<bool> RevokeAllUserTokensAsync(int userId);
+        // 반환형이 AuthTokenDTO로 변경됨
+        Task<Protocol.AuthTokenDTO?> GetTokenAsync(string id, string clientToken);
     }
+
     public class AuthTokenHelper : IAuthTokenHelper
     {
         private readonly IRedisHelper _redisHelper;
@@ -28,21 +28,27 @@ namespace LobbyServer.AuthService
 
         public async Task<string?> CreateTokenAsync(User user, string deviceId, string tokenString)
         {
-            // 토큰 객체 생성
-            var token = new AuthToken
+            // 1. DateTime 대신 Unix Timestamp (초 단위) 생성
+            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long expiresUnix = DateTimeOffset.UtcNow.Add(_tokenExpiry).ToUnixTimeSeconds();
+
+            // 2. DTO 객체 생성 (필요시 ulong 캐스팅 적용)
+            var token = new Protocol.AuthTokenDTO
             {
                 Token = tokenString,
-                UID = user.UID,
-                DeviceID = deviceId,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.Add(_tokenExpiry)
+                Uid = user.UID,           // 타입이 안 맞는다면 (ulong) 추가
+                DeviceId = deviceId,
+                CreatedAt = nowUnix,      // 타입이 안 맞는다면 (ulong) 추가
+                ExpiresAt = expiresUnix   // 타입이 안 맞는다면 (ulong) 추가
             };
 
-            // Redis에 토큰 저장
-            string redisKey = $"auth:token:{user.ID}";
-            string jsonValue = JsonSerializer.Serialize(token); // 접두어 없이 순수 JSON만
+            string redisKey = $"auth:token:{user.ID}"; // (참고: UID와 ID가 다른 것이 맞다면 그대로 유지)
 
-            bool saved = await _redisHelper.SetKeyValueAsync(redisKey, jsonValue, _tokenExpiry);
+            // 3. 구글 Protobuf 방식의 초간단 직렬화 (이전의 MemoryStream 코드 통째로 대체!)
+            byte[] protoBytes = token.ToByteArray();
+
+            // 4. Redis 저장
+            bool saved = await _redisHelper.SetKeyValueAsync(redisKey, protoBytes, _tokenExpiry);
             if (!saved)
             {
                 return null;
@@ -51,53 +57,49 @@ namespace LobbyServer.AuthService
             return tokenString;
         }
 
-        public async Task<AuthToken?> GetTokenAsync(string id, string clientToken)
+        public async Task<Protocol.AuthTokenDTO?> GetTokenAsync(string id, string clientToken)
         {
-            // 1. UID를 키로 사용하여 Redis에서 데이터를 가져옴
             string redisKey = $"auth:token:{id}";
-            var jsonData = await _redisHelper.GetValueAsync(redisKey);
 
-            if (string.IsNullOrEmpty(jsonData))
+            byte[]? byteData = await _redisHelper.GetBinaryValueAsync(redisKey);
+
+            if (byteData == null || byteData.Length == 0)
             {
                 return null; // 세션이 만료되었거나 존재하지 않음
             }
 
-            // 2. JSON을 객체로 복구
-            var authToken = JsonSerializer.Deserialize<AuthToken>(jsonData);
-            if (authToken == null) return null;
-
-            // 3. [핵심] 클라이언트가 보낸 토큰과 Redis에 저장된 최신 토큰이 일치하는지 비교
-            if (authToken.Token != clientToken)
+            try
             {
-                // 토큰이 다르다는 건 다른 기기에서 새로 로그인해서 '밀려났다'는 뜻!
+                Protocol.AuthTokenDTO authToken;
+
+                using (var stream = new MemoryStream(byteData))
+                {
+                    authToken = Serializer.Deserialize<Protocol.AuthTokenDTO>(stream);
+                }
+
+                if (authToken.Token != clientToken)
+                {
+                    return null; // 다른 기기 로그인으로 밀려남
+                }
+
+                long currentUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                if (authToken.ExpiresAt < currentUnix)
+                {
+                    return null;
+                }
+
+                return authToken;
+            }
+            catch (Exception) // 역직렬화 실패 시 (데이터 손상 등)
+            {
                 return null;
             }
-
-            // 4. 만료 시간 체크
-            if (authToken.ExpiresAt < DateTime.UtcNow)
-            {
-                //await _redisHelper.DeleteKeyAsync(redisKey);
-                return null;
-            }
-
-            return authToken;
         }
 
         public async Task<bool> RevokeTokenAsync(string id)
         {
             string redisKey = $"auth:token:{id}";
-            bool deleted = await _redisHelper.DeleteKeyAsync(redisKey);
-            return deleted;
+            return await _redisHelper.DeleteKeyAsync(redisKey);
         }
-    }
-
-    public class AuthToken
-    {
-        public string Token { get; set; } = string.Empty;
-        public long UID { get; set; }
-        public string DeviceID { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; }
-        public DateTime ExpiresAt { get; set; }
-        public bool IsExpired => DateTime.UtcNow > ExpiresAt;
     }
 }
