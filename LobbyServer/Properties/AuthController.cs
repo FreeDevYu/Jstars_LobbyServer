@@ -1,4 +1,4 @@
-﻿using LobbyServer.AuthService;
+﻿using LobbyServer.Services;
 using LobbyServer.Models;
 using Microsoft.AspNetCore.Mvc;
 

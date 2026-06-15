@@ -1,5 +1,5 @@
-﻿using LobbyServer.Hubs;
-using LobbyServer.LobbyService;
+﻿using LobbyServer.Helper;
+using LobbyServer.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 
@@ -96,7 +96,12 @@ namespace LobbyServer.BackgroundServices
                         using (var scope = _scopeFactory.CreateScope())
                         {
                             var matchingHelper = scope.ServiceProvider.GetRequiredService<IMatchingHelper>();
-                            bool success = await matchingHelper.CreateRoomAsync(matchedUids);
+                            bool success = await matchingHelper.CachingPlayerData(matchedUids);
+                            if(success)
+                            {
+                                success = await matchingHelper.CreateRoomAsync(matchedUids, 2);
+                            }
+
                             if (success)
                             {
                                 _logger.LogInformation($"[매칭 성사] UID: {string.Join(", ", matchedUids)}");

@@ -6,7 +6,7 @@ using System;
 using System.IO;          // MemoryStream 사용을 위해 추가
 using System.Threading.Tasks;
 
-namespace LobbyServer.AuthService
+namespace LobbyServer.Helper
 {
     public interface IAuthTokenHelper
     {
@@ -42,7 +42,7 @@ namespace LobbyServer.AuthService
                 ExpiresAt = expiresUnix   // 타입이 안 맞는다면 (ulong) 추가
             };
 
-            string redisKey = $"auth:token:{user.ID}"; // (참고: UID와 ID가 다른 것이 맞다면 그대로 유지)
+            string redisKey = $"auth:token:{user.UID}";
 
             // 3. 구글 Protobuf 방식의 초간단 직렬화 (이전의 MemoryStream 코드 통째로 대체!)
             byte[] protoBytes = token.ToByteArray();
@@ -70,11 +70,12 @@ namespace LobbyServer.AuthService
 
             try
             {
-                Protocol.AuthTokenDTO authToken;
+                Protocol.AuthTokenDTO authToken = Protocol.AuthTokenDTO.Parser.ParseFrom(byteData);
 
-                using (var stream = new MemoryStream(byteData))
+                // 2. 토큰 일치 확인
+                if (authToken.Token != clientToken)
                 {
-                    authToken = Serializer.Deserialize<Protocol.AuthTokenDTO>(stream);
+                    return null;
                 }
 
                 if (authToken.Token != clientToken)

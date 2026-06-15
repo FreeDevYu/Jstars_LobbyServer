@@ -2,9 +2,9 @@
 using MailKit.Security;
 using MimeKit;
 using System.Text.Json;
-using static LobbyServer.AuthService.IEmailAuthHelper;
+using static LobbyServer.Helper.IEmailAuthHelper;
 
-namespace LobbyServer.AuthService
+namespace LobbyServer.Helper
 {
     public interface IEmailAuthHelper
     {

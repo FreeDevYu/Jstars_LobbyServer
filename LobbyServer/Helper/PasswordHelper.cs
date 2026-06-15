@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using System.Security.Cryptography;
 
-namespace LobbyServer.AuthService
+namespace LobbyServer.Helper
 {
     public interface IPasswordHelper
     {

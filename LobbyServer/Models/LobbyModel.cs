@@ -70,7 +70,13 @@ namespace LobbyAPI.Models
     public class NicknameChangeResponse
     {
         [ProtoMember(1)]
+        public long UID { get; set; } = 0;
+        [ProtoMember(2)]
+        public int RemainCount { get; set; } = 0;
+        [ProtoMember(3)]
         public NicknameChangeResult Result { get; set; }
+        [ProtoMember(4)]
+        public string ResultNickname { get; set; } = string.Empty;
     }
 
     [ProtoContract]
@@ -82,7 +88,7 @@ namespace LobbyAPI.Models
         [ProtoMember(2)]
         public int Level { get; set; }
         [ProtoMember(3)]
-        public int Exp { get; set; }
+        public long Exp { get; set; }
     }
 
     [ProtoContract]
@@ -181,5 +187,69 @@ namespace LobbyAPI.Models
     {
         [ProtoMember(1)]
         public string Name { get; set; }
+    }
+
+    public static class MatchRewardConstants
+    {
+        // 경험치
+        public const long WinBaseExp = 10;
+        public const long LoseBaseExp = 5;
+        public const long PerKillExp = 2;
+
+        // 골드
+        public const long WinBaseGold = 100;
+        public const long LoseBaseGold = 50;
+        public const long PerKillGold = 10;
+    }
+
+    public static class CharacterLevelConstants
+    {
+        public const long ExpPerLevel = 100;
+    }
+
+    public static class RankingConstants
+    {
+        public const int TopEntryCount = 100;
+        public const int MinPlayCount = 10;
+    }
+
+    [ProtoContract]
+    public class RankingEntry
+    {
+        [ProtoMember(1)]
+        public int DisplayRank { get; set; }
+
+        [ProtoMember(2)]
+        public long UID { get; set; }
+
+        [ProtoMember(3)]
+        public string Nickname { get; set; } = string.Empty;
+
+        [ProtoMember(4)]
+        public int Win { get; set; }
+
+        [ProtoMember(5)]
+        public int Total { get; set; }
+
+        [ProtoMember(6)]
+        public decimal WinRate { get; set; }
+    }
+
+    [ProtoContract]
+    public class RankingListRequest
+    {
+    }
+
+    [ProtoContract]
+    public class RankingListResponse
+    {
+        [ProtoMember(1)]
+        public bool Success { get; set; }
+
+        [ProtoMember(2)]
+        public DateTime RefreshedAt { get; set; }
+
+        [ProtoMember(3)]
+        public List<RankingEntry> Entries { get; set; } = new();
     }
 }

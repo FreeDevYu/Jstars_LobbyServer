@@ -29,56 +29,58 @@ namespace LobbyServer.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("매칭 응답 수신 워커(MatchResponseWorker)가 시작되었습니다.");
+            _logger.LogInformation("매칭 응답 수신 워커 시작.");
 
             var subscriber = _redis.GetSubscriber();
             var db = _redis.GetDatabase();
 
-            // C++ 서버가 발행(Publish)하는 채널 구독 (비동기 이벤트 대기)
-            await subscriber.SubscribeAsync(MatchCompleteChannel, async (channel, message) =>
+            // 1. 구독 시작
+            await subscriber.SubscribeAsync(MatchCompleteChannel, (channel, message) =>
             {
-                try
+                // 콜백 내부에서 직접 async 로직을 실행하기 위해 Task.Run 권장 (선택사항)
+                _ = Task.Run(async () =>
                 {
-                    GameRoomCreateResponse responseDto = GameRoomCreateResponse.Parser.ParseFrom((byte[])message);
-
-                    _logger.LogInformation($"[방 생성 완료 수신] IP: {responseDto.Ip}, Port: {responseDto.Port}, 인원: {responseDto.Uids.Count}명");
-
-                    // 병렬 처리를 위한 개선 코드
-                    var sendTasks = responseDto.Uids.Select(async uid =>
+                    try
                     {
-                        var connectionId = await db.StringGetAsync($"SignalRConn:{uid}");
-                        if (!connectionId.IsNullOrEmpty)
-                        {
-                            await _hubContext.Clients.Client(connectionId).SendAsync("MatchSuccess", new
-                            {
-                                Ip = responseDto.Ip,
-                                Port = responseDto.Port
-                            });
-                            _logger.LogInformation($"[SignalR 발송 완료] UID: {uid} -> {connectionId}");
-                        }
-                        else
-                        {
-                            _logger.LogWarning($"[SignalR 발송 실패] UID: {uid}의 ConnectionId를 찾을 수 없습니다.");
-                        }
-                    });
+                        GameRoomCreateResponse responseDto = GameRoomCreateResponse.Parser.ParseFrom((byte[])message);
+                        _logger.LogInformation($"[방 생성 수신] RoomID: {responseDto.Roomid}");
 
-                    // 모든 유저에게 동시에 비동기로 발송
-                    await Task.WhenAll(sendTasks);
-                }
-                catch (Exception ex)
-                {
-                    // 역직렬화 실패 등 에러가 발생해도 워커(이벤트 리스너)가 죽지 않도록 방어
-                    _logger.LogError($"매칭 응답 처리 중 오류 발생: {ex.Message}");
-                }
+                        // 2. Redis에서 여러 ConnectionId를 한 번에 조회 (성능 최적화)
+                        var keys = responseDto.Uids.Select(uid => (RedisKey)$"SignalRConn:{uid}").ToArray();
+                        var connectionIds = await db.StringGetAsync(keys);
+
+                        var sendTasks = responseDto.Uids.Select(async (uid, index) =>
+                        {
+                            var connectionId = connectionIds[index];
+                            if (!connectionId.IsNullOrEmpty)
+                            {
+                                await _hubContext.Clients.Client(connectionId!).SendAsync("MatchSuccess", new
+                                {
+                                    Ip = responseDto.Ip,
+                                    Port = responseDto.Port,
+                                    RoomID = responseDto.Roomid
+                                }, stoppingToken); // 토큰 전달
+                            }
+                        });
+
+                        await Task.WhenAll(sendTasks);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"처리 중 오류: {ex.Message}");
+                    }
+                }, stoppingToken);
             });
 
+            // 3. 종료 대기 및 자원 해제
             try
             {
                 await Task.Delay(Timeout.Infinite, stoppingToken);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
-                // 정상 종료 시 발생하는 취소 예외 무시
+                _logger.LogInformation("매칭 워커 종료 중... 구독을 해제합니다.");
+                await subscriber.UnsubscribeAsync(MatchCompleteChannel); // 명시적 구독 해제
             }
         }
 

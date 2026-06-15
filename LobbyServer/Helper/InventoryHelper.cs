@@ -4,13 +4,14 @@ using LobbyServer.Repositories;
 using System.Text.Json;
 
 
-namespace LobbyServer.LobbyService
+namespace LobbyServer.Helper
 {
     public interface IInventoryHelper
     {
         Task<List<Item>> GetInventoryListByUIDAsync(long uid);
         Task<(bool result, long equipped, long unequipped)> EquipItem(long uid, long itemID);
-        Task<NicknameChangeResult> ChangeNickname(long uid, string newNickname, long itemInstanceID);
+        Task<NicknameChangeResponse> ChangeNickname(long uid, string newNickname, long itemInstanceID);
+        Task<bool> AddItemToCacheAsync(long uid, Item item);
     }
 
     public class InventoryHelper : IInventoryHelper
@@ -34,10 +35,8 @@ namespace LobbyServer.LobbyService
 
             if (cachingData != null && cachingData.Count > 0)
             {
-                // 캐시 읽기: "Dummy" 필드를 제외하고 실제 아이템만 역직렬화
-                result = cachingData
-                            .Where(kvp => kvp.Key != "Dummy")
-                            .Select(kvp => JsonSerializer.Deserialize<Item>(kvp.Value))
+                result = cachingData.Values
+                            .Select(json => JsonSerializer.Deserialize<Item>(json))
                             .ToList();
                 return result;
             }
@@ -45,25 +44,19 @@ namespace LobbyServer.LobbyService
             var dbData = await _lobbyRespository.GetInventoryListByUIDAsync(uid);
             result = dbData.ToList();
 
-            var hashEntries = new Dictionary<string, string>();
+            if (result.Count > 0)
+            {
+                var hashEntries = new Dictionary<string, string>();
 
-            // 캐시 쓰기: 아이템이 없으면 "Dummy" 추가, 있으면 아이템 추가
-            if (result.Count == 0)
-            {
-                hashEntries.Add("Dummy", "true");
-            }
-            else
-            {
                 foreach (var item in result)
                 {
                     string field = item.InstanceID.ToString();
                     string jsonValue = JsonSerializer.Serialize(item);
                     hashEntries.Add(field, jsonValue);
                 }
-            }
 
-            // Dummy가 들어갔든 아이템이 들어갔든 hashEntries.Count는 무조건 0보다 크므로 바로 저장
-            await _redisHelper.SetHashFieldsAsync(redisKey, hashEntries, _inventoryDataExpiry);
+                await _redisHelper.SetHashFieldsAsync(redisKey, hashEntries, _inventoryDataExpiry);
+            }
 
             return result;
         }
@@ -124,39 +117,62 @@ namespace LobbyServer.LobbyService
             }
         }
 
-        public async Task<NicknameChangeResult> ChangeNickname(long uid, string newNickname, long itemInstanceID)
+        public async Task<NicknameChangeResponse> ChangeNickname(long uid, string newNickname, long itemInstanceID)
         {
+            NicknameChangeResponse response = new NicknameChangeResponse();
+
             string redisKey = $"inventory:{uid}";
             string lockKey = $"lock:inventory:{uid}";
 
             // 분산 락 획득 (예시: 3초 동안 락 점유, 유저당 동시 접근 방지)
             string lockToken = Guid.NewGuid().ToString();
             bool isLocked = await _redisHelper.AcquireLockAsync(lockKey, lockToken, TimeSpan.FromSeconds(3));
-            if (!isLocked) return (NicknameChangeResult.None); // 중복 요청 방어
+            if (!isLocked)
+            {
+                response.Result = NicknameChangeResult.None;
+                return response; // 중복 요청 방어
+            }
 
             try
             {
                 List<Item> inventory = await GetInventoryListByUIDAsync(uid);
                 if (inventory.Count < 1)
-                    return (NicknameChangeResult.NoCoupon);
+                {
+                    response.Result = NicknameChangeResult.NoCoupon;
+                    return response;
+                }
 
                 ItemSubCategory subCategory = ItemSubCategory.NicknameChangeCoupon;
 
                 Item nicknameCoupon = inventory.FirstOrDefault(x => x.InstanceID == itemInstanceID);
 
                 if (nicknameCoupon == null)
-                    return (NicknameChangeResult.NoCoupon);
+                {
+                    response.Result = NicknameChangeResult.NoCoupon;
+                    return response;
+                }
                 if (nicknameCoupon.SubCategory != ItemSubCategory.NicknameChangeCoupon)
-                    return (NicknameChangeResult.None);
+                {
+                    response.Result = NicknameChangeResult.None;
+                    return response;
+                }
 
                 if (nicknameCoupon.Count < 1)
-                    return (NicknameChangeResult.NoCoupon);
+                {
+                    response.Result = NicknameChangeResult.NoCoupon;
+                    return response;
+                }
 
                 NicknameChangeResult result = await _lobbyRespository.NicknameChangeAsync(uid, newNickname, subCategory, itemInstanceID);
 
                 if (result == NicknameChangeResult.Success)
                 {
                     nicknameCoupon.Count--;
+
+                    response.Result = NicknameChangeResult.Success;
+                    response.UID = uid;
+                    response.RemainCount = nicknameCoupon.Count;
+                    response.ResultNickname = newNickname;
                     if (nicknameCoupon.Count < 1)
                     {
                         await _redisHelper.DeleteHashFieldAsync(redisKey, nicknameCoupon.InstanceID.ToString());
@@ -172,7 +188,35 @@ namespace LobbyServer.LobbyService
                     }
                 }
 
-                return result;
+                return response;
+            }
+            finally
+            {
+                await _redisHelper.ReleaseLockAsync(lockKey, lockToken);
+            }
+        }
+
+        public async Task<bool> AddItemToCacheAsync(long uid, Item item)
+        {
+            if (item == null || item.InstanceID <= 0)
+                return false;
+
+            string redisKey = $"inventory:{uid}";
+            string lockKey = $"lock:inventory:{uid}";
+            string lockToken = Guid.NewGuid().ToString();
+            bool isLocked = await _redisHelper.AcquireLockAsync(lockKey, lockToken, TimeSpan.FromSeconds(3));
+            if (!isLocked)
+                return false;
+
+            try
+            {
+                var changedEntries = new Dictionary<string, string>
+                {
+                    { item.InstanceID.ToString(), JsonSerializer.Serialize(item) }
+                };
+
+                await _redisHelper.SetHashFieldsAsync(redisKey, changedEntries, _inventoryDataExpiry);
+                return true;
             }
             finally
             {

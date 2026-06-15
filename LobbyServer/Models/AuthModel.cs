@@ -121,6 +121,7 @@ namespace LobbyServer.Models
         public DateTime? LastLoginAt { get; set; }
         public string Status { get; set; } = string.Empty;//'active', 'suspended', 'banned'
         public string NickName { get; set; } = string.Empty;
+        public long Gold { get; set; } = 0;
     }
 
     // 클라이언트에 전송할 안전한 사용자 모델 (패스워드 정보 제외)
@@ -141,6 +142,8 @@ namespace LobbyServer.Models
         public string Status { get; set; } = string.Empty;
         [ProtoMember(7)]
         public string NickName { get; set; } = string.Empty;
+        [ProtoMember(8)]
+        public long Gold { get; set; } = 0;
 
         public static UserSafeModel FromUser(User user)
         {
@@ -152,8 +155,20 @@ namespace LobbyServer.Models
                 CreatedAt = user.CreatedAt,
                 LastLoginAt = user.LastLoginAt,
                 Status = user.Status,
-                NickName = user.NickName
+                NickName = user.NickName,
+                Gold = user.Gold,
             };
         }
+    }
+
+    [ProtoContract]
+    public class UserCachingModel
+    {
+        [ProtoMember(1)]
+        public long UID { get; set; }
+        [ProtoMember(2)]
+        public string NickName { get; set; } = string.Empty;
+        [ProtoMember(3)]
+        public long Gold { get; set; }
     }
 }

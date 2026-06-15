@@ -1,13 +1,12 @@
-﻿using LobbyServer.Models;
+﻿using LobbyServer.Helper;
+using LobbyServer.Models;
 using LobbyServer.Repositories;
 using MySqlConnector;
-using StackExchange.Redis;
 using System.Security.Cryptography;
-using System.Text.Json;
-using static LobbyServer.AuthService.IEmailAuthHelper;
 
 
-namespace LobbyServer.AuthService
+
+namespace LobbyServer.Services
 {
     public interface IAuthService
     {
@@ -24,19 +23,21 @@ namespace LobbyServer.AuthService
         private readonly IAuthTokenHelper _authTokenHelper;
         private readonly IPasswordHelper _passwordHelper;
         private readonly IEmailAuthHelper _emailAuthHelper;
+        private readonly IUserHelper _userHelper;
 
-        public AuthService(IUserRespository userRepository, IAuthTokenHelper authTokenHelper, IPasswordHelper passwordHelper, IEmailAuthHelper emailAuthHelper)
+        public AuthService(IUserRespository userRepository, IAuthTokenHelper authTokenHelper, IPasswordHelper passwordHelper, IEmailAuthHelper emailAuthHelper, IUserHelper userHelper)
         {
             _userRepository = userRepository;
             _authTokenHelper = authTokenHelper;
             _passwordHelper = passwordHelper;
             _emailAuthHelper = emailAuthHelper;
+            _userHelper = userHelper;
         }
 
         public async Task<UsingIDResponse> UsingIDCheckAsync(UsingIDRequest request)
         {
             string id = request.ID;
-            var existingUserByUserID = await _userRepository.GetByUserIDAsync(id);
+            var existingUserByUserID = await _userRepository.GetUserByIDAsync(id);
             if (existingUserByUserID != null)
             {
                 return new UsingIDResponse {Success = false };
@@ -57,8 +58,6 @@ namespace LobbyServer.AuthService
        //        return new EmailAuthResponse { Success = success };
        //    }
 
-            //이메일인증로직
-            //_emailAuthHelper
             string authToken = GenerateUniqueToken();
             var dto = new EmailAuthDTO
             {
@@ -79,7 +78,7 @@ namespace LobbyServer.AuthService
             string email = request.Email;
             string emailAuthToken = request.EmailAuthToken;
 
-            var existingUserByUserID = await _userRepository.GetByUserIDAsync(id);
+            var existingUserByUserID = await _userRepository.GetUserByIDAsync(id);
             if (existingUserByUserID != null)
             {
                 return new RegistResponse { State = RegistResponse.ResultState.UsingID };
@@ -126,6 +125,12 @@ namespace LobbyServer.AuthService
 
                 // 데이터베이스에 저장
                 long userId = await _userRepository.CreateIDAsync(newUser);
+                if (userId <= 0)
+                {
+                    return new RegistResponse { State = RegistResponse.ResultState.UsingID };
+                }
+
+                await _userHelper.ApplyNewAccountRewardsAsync(userId);
 
                 return new RegistResponse { State = RegistResponse.ResultState.Success };
             }
@@ -149,7 +154,7 @@ namespace LobbyServer.AuthService
                 string devideID = request.DeviceID;
 
                 // 사용자 조회
-                var user = await _userRepository.GetByUserIDAsync(id);
+                var user = await _userRepository.GetUserByIDAsync(id);
 
                 if (user == null)
                 {
@@ -181,6 +186,8 @@ namespace LobbyServer.AuthService
                 {
                     return new LoginResponse { State = LoginResponse.ResultState.InvalidToken, Token = null };
                 }
+
+                await _userHelper.SetUserData(user);
 
                 return new LoginResponse { State = LoginResponse.ResultState.Success, User = UserSafeModel.FromUser(user), Token = token };
             }

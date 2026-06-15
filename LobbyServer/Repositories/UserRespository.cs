@@ -10,11 +10,12 @@ namespace LobbyServer.Repositories
 {
     public interface IUserRespository
     {
-        //Task<User> GetByIdAsync(int uid);
-        Task<User> GetByUserIDAsync(string id);
+        Task<User> GetUserByUIDAsync(long uid);
+        Task<User> GetUserByIDAsync(string id);
         Task<User> GetByEmailAsync(string email);
         Task<long> CreateIDAsync(User user);
         Task<bool> UpdateAsync(User user);
+        Task<bool> SetGoldAsync(long uid, long gold);
         Task<bool> UpdateLastLoginAsync(long uid, DateTime loginTime);
     }
 
@@ -27,7 +28,7 @@ namespace LobbyServer.Repositories
             _db = db;
         }
 
-        public async Task<User> GetByUserIDAsync(string id)
+        public async Task<User> GetUserByIDAsync(string id)
         {
             return await _db.Query("users")
                             .Where("id", id)
@@ -39,7 +40,28 @@ namespace LobbyServer.Repositories
                                 "salt AS Salt",
                                 "created_at AS CreatedAt",
                                 "last_login_at AS LastLoginAt",
-                                "status AS Status"
+                                "status AS Status",
+                                "nickname AS NickName",
+                                "gold AS Gold"
+                            )
+                            .FirstOrDefaultAsync<User>();
+        }
+
+        public async Task<User> GetUserByUIDAsync(long uid)
+        {
+            return await _db.Query("users")
+                            .Where("uid", uid)
+                            .Select(
+                                "uid AS UID",
+                                "id AS ID",
+                                "email AS Email",
+                                "password_hash AS PasswordHash",
+                                "salt AS Salt",
+                                "created_at AS CreatedAt",
+                                "last_login_at AS LastLoginAt",
+                                "status AS Status",
+                                "nickname AS NickName",
+                                "gold AS Gold"
                             )
                             .FirstOrDefaultAsync<User>();
         }
@@ -100,8 +122,21 @@ namespace LobbyServer.Repositories
                     password_hash = user.PasswordHash,
                     salt = user.Salt,
                     last_login_at = user.LastLoginAt,
-                    status = user.Status
+                    status = user.Status,
+                    gold = user.Gold,
                 });
+
+            return affected > 0;
+        }
+
+        public async Task<bool> SetGoldAsync(long uid, long gold)
+        {
+            if (uid <= 0 || gold < 0)
+                return false;
+
+            int affected = await _db.Query("users")
+                .Where("uid", uid)
+                .UpdateAsync(new { gold });
 
             return affected > 0;
         }

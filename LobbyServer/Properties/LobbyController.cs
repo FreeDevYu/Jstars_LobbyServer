@@ -1,5 +1,5 @@
 ﻿using LobbyAPI.Models;
-using LobbyServer.LobbyService;
+using LobbyServer.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LobbyServer.Properties

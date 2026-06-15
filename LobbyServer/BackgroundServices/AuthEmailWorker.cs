@@ -1,5 +1,5 @@
 ﻿using Humanizer;
-using LobbyServer.AuthService;
+using LobbyServer.Helper;
 using Microsoft.Extensions.DependencyInjection; // IServiceScopeFactory를 위해 필요
 using StackExchange.Redis;
 using System.Text.Json;

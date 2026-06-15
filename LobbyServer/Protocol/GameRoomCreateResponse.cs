@@ -24,13 +24,13 @@ namespace Protocol {
     static GameRoomCreateResponseReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "ChxHYW1lUm9vbUNyZWF0ZVJlc3BvbnNlLnByb3RvEghQcm90b2NvbCJAChZH",
+            "ChxHYW1lUm9vbUNyZWF0ZVJlc3BvbnNlLnByb3RvEghQcm90b2NvbCJQChZH",
             "YW1lUm9vbUNyZWF0ZVJlc3BvbnNlEgoKAmlwGAEgASgJEgwKBHBvcnQYAiAB",
-            "KAUSDAoEdWlkcxgDIAMoBGIGcHJvdG8z"));
+            "KAUSDgoGcm9vbWlkGAMgASgFEgwKBHVpZHMYBCADKARiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Protocol.GameRoomCreateResponse), global::Protocol.GameRoomCreateResponse.Parser, new[]{ "Ip", "Port", "Uids" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Protocol.GameRoomCreateResponse), global::Protocol.GameRoomCreateResponse.Parser, new[]{ "Ip", "Port", "Roomid", "Uids" }, null, null, null, null)
           }));
     }
     #endregion
@@ -74,6 +74,7 @@ namespace Protocol {
     public GameRoomCreateResponse(GameRoomCreateResponse other) : this() {
       ip_ = other.ip_;
       port_ = other.port_;
+      roomid_ = other.roomid_;
       uids_ = other.uids_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
@@ -108,10 +109,22 @@ namespace Protocol {
       }
     }
 
+    /// <summary>Field number for the "roomid" field.</summary>
+    public const int RoomidFieldNumber = 3;
+    private int roomid_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Roomid {
+      get { return roomid_; }
+      set {
+        roomid_ = value;
+      }
+    }
+
     /// <summary>Field number for the "uids" field.</summary>
-    public const int UidsFieldNumber = 3;
+    public const int UidsFieldNumber = 4;
     private static readonly pb::FieldCodec<ulong> _repeated_uids_codec
-        = pb::FieldCodec.ForUInt64(26);
+        = pb::FieldCodec.ForUInt64(34);
     private readonly pbc::RepeatedField<ulong> uids_ = new pbc::RepeatedField<ulong>();
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -136,6 +149,7 @@ namespace Protocol {
       }
       if (Ip != other.Ip) return false;
       if (Port != other.Port) return false;
+      if (Roomid != other.Roomid) return false;
       if(!uids_.Equals(other.uids_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -146,6 +160,7 @@ namespace Protocol {
       int hash = 1;
       if (Ip.Length != 0) hash ^= Ip.GetHashCode();
       if (Port != 0) hash ^= Port.GetHashCode();
+      if (Roomid != 0) hash ^= Roomid.GetHashCode();
       hash ^= uids_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -173,6 +188,10 @@ namespace Protocol {
         output.WriteRawTag(16);
         output.WriteInt32(Port);
       }
+      if (Roomid != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Roomid);
+      }
       uids_.WriteTo(output, _repeated_uids_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -192,6 +211,10 @@ namespace Protocol {
         output.WriteRawTag(16);
         output.WriteInt32(Port);
       }
+      if (Roomid != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Roomid);
+      }
       uids_.WriteTo(ref output, _repeated_uids_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -208,6 +231,9 @@ namespace Protocol {
       }
       if (Port != 0) {
         size += 1 + pb::CodedOutputStream.ComputeInt32Size(Port);
+      }
+      if (Roomid != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Roomid);
       }
       size += uids_.CalculateSize(_repeated_uids_codec);
       if (_unknownFields != null) {
@@ -227,6 +253,9 @@ namespace Protocol {
       }
       if (other.Port != 0) {
         Port = other.Port;
+      }
+      if (other.Roomid != 0) {
+        Roomid = other.Roomid;
       }
       uids_.Add(other.uids_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -256,8 +285,12 @@ namespace Protocol {
             Port = input.ReadInt32();
             break;
           }
-          case 26:
           case 24: {
+            Roomid = input.ReadInt32();
+            break;
+          }
+          case 34:
+          case 32: {
             uids_.AddEntriesFrom(input, _repeated_uids_codec);
             break;
           }
@@ -288,8 +321,12 @@ namespace Protocol {
             Port = input.ReadInt32();
             break;
           }
-          case 26:
           case 24: {
+            Roomid = input.ReadInt32();
+            break;
+          }
+          case 34:
+          case 32: {
             uids_.AddEntriesFrom(ref input, _repeated_uids_codec);
             break;
           }

@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using LobbyAPI.Models;
+using LobbyServer.Models;
 using MySqlConnector;
 using SqlKata.Execution;
 using System.Data;
@@ -12,7 +13,10 @@ namespace LobbyServer.Repositories
         Task<IEnumerable<Character>> GetAllCharactersByUIDAsync(long uid);
         Task<IEnumerable<Item>> GetInventoryListByUIDAsync(long uid);
         Task<bool> EquipAsync(long uid, long itemID);
+        Task<bool> UpdateCharacterLevelExpAsync(long characterInstanceId, int level, long exp);
+        Task<PvpRecord?> IncrementPvpRecordAsync(long uid, bool isWin);
         Task<NicknameChangeResult> NicknameChangeAsync(long uid, string newNickname, ItemSubCategory subcategory, long itemInstanceID);
+        Task<AddItemResult?> AddItemAsync(long uid, ItemCategory category, ItemSubCategory subCategory, int level, int count);
     }
 
     public class LobbyRespository : ILobbyRespository
@@ -61,6 +65,42 @@ namespace LobbyServer.Repositories
                       "is_equipped AS IsEquipped"
                   )
                   .GetAsync<Item>();
+        }
+
+        public async Task<bool> UpdateCharacterLevelExpAsync(long characterInstanceId, int level, long exp)
+        {
+            var affected = await _db.Query("characters")
+                .Where("character_instance_id", characterInstanceId)
+                .UpdateAsync(new
+                {
+                    level = level,
+                    exp = exp
+                });
+
+            return affected > 0;
+        }
+
+        //단순 카운터 (win/total) → SQL 원자적 증가
+        public async Task<PvpRecord?> IncrementPvpRecordAsync(long uid, bool isWin)
+        {
+            int winIncrement = isWin ? 1 : 0;
+
+            int affected = await _db.Connection.ExecuteAsync(@"
+                UPDATE match_records
+                SET pvp_play_count = pvp_play_count + 1,
+                    pvp_win_count = pvp_win_count + @winIncrement
+                WHERE uid = @uid",
+                new { uid, winIncrement });
+
+            if (affected == 0)
+            {
+                await _db.Connection.ExecuteAsync(@"
+                    INSERT INTO match_records (uid, pvp_win_count, pvp_play_count)
+                    VALUES (@uid, @winIncrement, 1)",
+                    new { uid, winIncrement });
+            }
+
+            return await GetPvpRecordByUIDAsync(uid);
         }
 
         public async Task<bool> EquipAsync(long uid, long itemID)
@@ -121,6 +161,47 @@ namespace LobbyServer.Repositories
                 // 시스템/네트워크 에러 처리
                 // _logger.LogError(ex, "닉네임 변경 프로시저 에러");
                 return 0;
+            }
+        }
+
+        public async Task<AddItemResult?> AddItemAsync(
+            long uid,
+            ItemCategory category,
+            ItemSubCategory subCategory,
+            int level,
+            int count)
+        {
+            if (uid <= 0 || count <= 0)
+                return null;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("input_uid", uid);
+            parameters.Add("input_category", (int)category);
+            parameters.Add("input_sub_category", (int)subCategory);
+            parameters.Add("input_level", level);
+            parameters.Add("input_count", count);
+            parameters.Add("output_success", dbType: DbType.Byte, direction: ParameterDirection.Output);
+            parameters.Add("output_new_instance_id", dbType: DbType.Int64, direction: ParameterDirection.Output);
+
+            try
+            {
+                await _db.Connection.ExecuteAsync(
+                    "AddItem",
+                    parameters,
+                    commandType: CommandType.StoredProcedure);
+
+                byte success = parameters.Get<byte>("output_success");
+                long instanceId = parameters.Get<long>("output_new_instance_id");
+
+                return new AddItemResult
+                {
+                    Success = success == 1 && instanceId > 0,
+                    InstanceId = instanceId
+                };
+            }
+            catch (MySqlException)
+            {
+                return null;
             }
         }
 

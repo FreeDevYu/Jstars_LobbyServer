@@ -1,21 +1,21 @@
 using LobbyAPI;
 using LobbyServer;
 using LobbyServer.Repositories;
-using LobbyServer.AuthService;
+using LobbyServer.Services;
 using MySqlConnector;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 using StackExchange.Redis;
 using LobbyServer.BackgroundServices;
-using LobbyServer.LobbyService;
 using LobbyServer.Hubs;
+using LobbyServer.Helper;
+using LobbyServer.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
 {
-    // 클라이언트의 Accept 헤더를 존중하겠다
     options.RespectBrowserAcceptHeader = true;
 })
 .AddProtoBufNet();
@@ -39,6 +39,7 @@ builder.Services.AddScoped<IUserRespository, UserRespository>();
 builder.Services.AddScoped<IPasswordHelper, PasswordHelper>();
 builder.Services.AddScoped<IAuthTokenHelper, AuthTokenHelper>();
 builder.Services.AddScoped<IEmailAuthHelper, EmailAuthHelper>();
+builder.Services.AddScoped<IUserHelper, UserHelper>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHostedService<AuthEmailWorker>();
 
@@ -48,23 +49,26 @@ builder.Services.AddScoped<ICharacterHelper, CharacterHelper>();
 builder.Services.AddScoped<IInventoryHelper, InventoryHelper>();
 builder.Services.AddScoped<IMatchingHelper, MatchingHelper>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();
+builder.Services.AddScoped<IShopRespository, ShopRespository>();
+builder.Services.AddScoped<IShopService, ShopService>();
 builder.Services.AddHostedService<MatchingRequestWorker>();
 builder.Services.AddHostedService<MatchResponseWorker>();
+builder.Services.AddHostedService<MatchResultWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerConfiguration();
 
 
-// SignalR 기능 활성화
+
 builder.Services.AddSignalR();
 
 var app = builder.Build();
-// 1. CORS 설정 (유니티 클라이언트 접속 허용)
+
 app.UseCors(policy => policy
     .AllowAnyHeader()
     .AllowAnyMethod()
     .AllowCredentials()
-    .SetIsOriginAllowed(_ => true)); // 로컬 테스트용
+    .SetIsOriginAllowed(_ => true)); 
 
 app.UseRouting();
 

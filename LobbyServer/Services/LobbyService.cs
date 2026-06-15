@@ -1,8 +1,9 @@
 ﻿using LobbyAPI.Models;
+using LobbyServer.Helper;
 using LobbyServer.Models;
 
 
-namespace LobbyServer.LobbyService
+namespace LobbyServer.Services
 {
     public interface ILobbyService
     {
@@ -19,12 +20,14 @@ namespace LobbyServer.LobbyService
         private readonly ICharacterHelper _characterHelper;
         private readonly IInventoryHelper _inventoryHelper;
         private readonly IMatchingHelper _matchigHelper;
+        private readonly IUserHelper _userHelper;
 
-        public LobbyService(ICharacterHelper characterHelper, IInventoryHelper inventoryHelper, IMatchingHelper matchigHelper)
+        public LobbyService(ICharacterHelper characterHelper, IInventoryHelper inventoryHelper, IMatchingHelper matchigHelper, IUserHelper userHelper)
         {
             _characterHelper = characterHelper;
             _inventoryHelper = inventoryHelper;
             _matchigHelper = matchigHelper;
+            _userHelper = userHelper;
         }
 
         public async Task<CharacterListResponse> GetCharactersAsync(CharacterListRequest request)
@@ -68,15 +71,22 @@ namespace LobbyServer.LobbyService
 
         public async Task<NicknameChangeResponse> NicknameChangeAsync(NicknameChangeRequest request)
         {
-            NicknameChangeResult result = NicknameChangeResult.None;
-            result = await _inventoryHelper.ChangeNickname(request.UID, request.NewNickname, request.ItemInstanceID);
+            NicknameChangeResponse response = await _inventoryHelper.ChangeNickname(request.UID, request.NewNickname, request.ItemInstanceID);
 
-            return new NicknameChangeResponse { Result = result };
+            if (response.Result == NicknameChangeResult.Success)
+            {
+                await _userHelper.UpdateUserNickname(response.UID, response.ResultNickname);
+            }
+
+            return response;
         }
 
         public async Task<EnqueueMatchingResponse> EnqueueMatchingAsync(EnqueueMatchingRequest request)
         {
-            bool success = await _matchigHelper.EnqueueMatchingQueue(request.UID);
+            long uid = request.UID;
+
+            bool success = await _matchigHelper.EnqueueMatchingQueue(uid);
+            
             return new EnqueueMatchingResponse { Success = success };
         }
 
