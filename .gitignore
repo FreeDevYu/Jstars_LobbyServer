@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# LobbyServer secrets (use appsettings.example.json as template)
+LobbyServer/appsettings.Development.json
+LobbyServer/appsettings.Production.json
