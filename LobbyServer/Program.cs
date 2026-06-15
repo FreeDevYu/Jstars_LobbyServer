@@ -48,12 +48,15 @@ builder.Services.AddScoped<ILobbyRespository, LobbyRespository>();
 builder.Services.AddScoped<ICharacterHelper, CharacterHelper>();
 builder.Services.AddScoped<IInventoryHelper, InventoryHelper>();
 builder.Services.AddScoped<IMatchingHelper, MatchingHelper>();
+builder.Services.AddScoped<IRankingHelper, RankingHelper>();
+builder.Services.AddScoped<IRankingService, RankingService>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();
 builder.Services.AddScoped<IShopRespository, ShopRespository>();
 builder.Services.AddScoped<IShopService, ShopService>();
 builder.Services.AddHostedService<MatchingRequestWorker>();
 builder.Services.AddHostedService<MatchResponseWorker>();
 builder.Services.AddHostedService<MatchResultWorker>();
+builder.Services.AddHostedService<RankingRefreshWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerConfiguration();

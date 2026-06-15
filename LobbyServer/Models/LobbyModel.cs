@@ -209,8 +209,16 @@ namespace LobbyAPI.Models
 
     public static class RankingConstants
     {
-        public const int TopEntryCount = 100;
-        public const int MinPlayCount = 10;
+        public const int TopEntryCount = 10;
+        public const int MinPlayCount = 1;
+
+        public const string DisplayKey = "ranking:pvp:display";
+        public const string MetaKey = "ranking:meta";
+        public const string RefreshLockKey = "lock:ranking:refresh";
+
+        public static readonly TimeSpan CacheExpiry = TimeSpan.FromHours(2);
+        public static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
+        public static readonly TimeSpan RefreshLockExpiry = TimeSpan.FromMinutes(2);
     }
 
     [ProtoContract]

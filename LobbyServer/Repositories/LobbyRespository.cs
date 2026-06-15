@@ -17,6 +17,7 @@ namespace LobbyServer.Repositories
         Task<PvpRecord?> IncrementPvpRecordAsync(long uid, bool isWin);
         Task<NicknameChangeResult> NicknameChangeAsync(long uid, string newNickname, ItemSubCategory subcategory, long itemInstanceID);
         Task<AddItemResult?> AddItemAsync(long uid, ItemCategory category, ItemSubCategory subCategory, int level, int count);
+        Task<IReadOnlyList<RankingEntry>> GetPvpRankingTopAsync();
     }
 
     public class LobbyRespository : ILobbyRespository
@@ -205,5 +206,46 @@ namespace LobbyServer.Repositories
             }
         }
 
+        public async Task<IReadOnlyList<RankingEntry>> GetPvpRankingTopAsync()
+        {
+            const string sql = @"
+                SELECT
+                    ranked.display_rank AS DisplayRank,
+                    ranked.uid          AS UID,
+                    ranked.nickname     AS Nickname,
+                    ranked.win          AS Win,
+                    ranked.total        AS Total,
+                    ranked.win_rate     AS WinRate
+                FROM (
+                    SELECT
+                        mr.uid,
+                        u.nickname,
+                        mr.pvp_win_count  AS win,
+                        mr.pvp_play_count AS total,
+                        ROUND(mr.pvp_win_count * 100.0 / mr.pvp_play_count, 2) AS win_rate,
+                        RANK() OVER (
+                            ORDER BY
+                                ROUND(mr.pvp_win_count * 100.0 / mr.pvp_play_count, 2) DESC,
+                                mr.pvp_play_count DESC
+                        ) AS display_rank
+                    FROM match_records mr
+                    JOIN users u ON u.uid = mr.uid
+                    WHERE mr.pvp_play_count >= @minPlayCount
+                ) ranked
+                ORDER BY
+                    ranked.display_rank ASC,
+                    ranked.uid ASC
+                LIMIT @topEntryCount;";
+
+            IEnumerable<RankingEntry> entries = await _db.Connection.QueryAsync<RankingEntry>(
+                sql,
+                new
+                {
+                    minPlayCount = RankingConstants.MinPlayCount,
+                    topEntryCount = RankingConstants.TopEntryCount
+                });
+
+            return entries.ToList();
+        }
     }
 }

@@ -9,10 +9,12 @@ namespace LobbyServer.Properties
     public class LobbyController : ControllerBase
     {
         private readonly ILobbyService _lobbyService;
+        private readonly IRankingService _rankingService;
 
-        public LobbyController(ILobbyService lobbyService)
+        public LobbyController(ILobbyService lobbyService, IRankingService rankingService)
         {
             _lobbyService = lobbyService;
+            _rankingService = rankingService;
         }
 
         [RedisAuthorize]
@@ -48,6 +50,14 @@ namespace LobbyServer.Properties
         {
             var result = await _lobbyService.EquipAsync(request);
 
+            return Ok(result);
+        }
+
+        [RedisAuthorize]
+        [HttpPost("GetRankingList")]
+        public async Task<IActionResult> GetRankingList([FromBody] RankingListRequest request)
+        {
+            var result = await _rankingService.GetRankingListAsync(request);
             return Ok(result);
         }
 
