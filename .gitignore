@@ -365,3 +365,5 @@ FodyWeavers.xsd
 # LobbyServer secrets (use appsettings.example.json as template)
 LobbyServer/appsettings.Development.json
 LobbyServer/appsettings.Production.json
+LobbyServer/.env.docker
+LobbyServer/.env.aws

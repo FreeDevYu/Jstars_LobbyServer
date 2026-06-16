@@ -1,0 +1,13 @@
+services:
+  lobbyserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jstars-lobbyserver
+    ports:
+      - "5242:8080"
+    env_file:
+      - .env.docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
