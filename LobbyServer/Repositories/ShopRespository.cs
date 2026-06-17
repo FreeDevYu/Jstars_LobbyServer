@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using LobbyServer.Models;
 using MySqlConnector;
 using SqlKata.Execution;

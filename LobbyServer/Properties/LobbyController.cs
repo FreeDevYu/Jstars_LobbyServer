@@ -1,4 +1,4 @@
-﻿using LobbyAPI.Models;
+using LobbyAPI.Models;
 using LobbyServer.Services;
 using Microsoft.AspNetCore.Mvc;
 

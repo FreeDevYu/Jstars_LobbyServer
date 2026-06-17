@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using LobbyAPI.Models;
 using LobbyServer.Models;
 using MySqlConnector;

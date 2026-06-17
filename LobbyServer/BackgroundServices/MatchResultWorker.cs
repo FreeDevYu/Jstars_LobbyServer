@@ -1,4 +1,4 @@
-﻿using LobbyServer.Helper;
+using LobbyServer.Helper;
 using LobbyServer.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;

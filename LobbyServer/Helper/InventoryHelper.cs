@@ -1,4 +1,4 @@
-﻿using LobbyAPI;
+using LobbyAPI;
 using LobbyAPI.Models;
 using LobbyServer.Repositories;
 using System.Text.Json;

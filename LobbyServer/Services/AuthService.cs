@@ -1,4 +1,4 @@
-﻿using LobbyServer.Helper;
+using LobbyServer.Helper;
 using LobbyServer.Models;
 using LobbyServer.Repositories;
 using MySqlConnector;
