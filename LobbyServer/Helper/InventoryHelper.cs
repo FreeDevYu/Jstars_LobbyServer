@@ -64,57 +64,27 @@ namespace LobbyServer.Helper
         public async Task<(bool result, long equipped, long unequipped)> EquipItem(long uid, long itemID)
         {
             string redisKey = $"inventory:{uid}";
-            string lockKey = $"lock:inventory:{uid}";
-            
-            // 분산 락 획득 (예시: 3초 동안 락 점유, 유저당 동시 접근 방지)
-            string lockToken = Guid.NewGuid().ToString();
-            bool isLocked = await _redisHelper.AcquireLockAsync(lockKey, lockToken, TimeSpan.FromSeconds(3));
-            if (!isLocked) return (false, -1, -1); // 중복 요청 방어
 
             List<Item> inventory = await GetInventoryListByUIDAsync(uid);
             if (inventory.Count < 1)
                 return (false, -1, -1);
 
-            // 장착 로직 실행
-            try
-            { 
-                Item itemToEquip = inventory.FirstOrDefault(x => x.InstanceID == itemID);
-                if (itemToEquip == null || itemToEquip.Category == ItemCategory.Using || itemToEquip.Count < 1 || itemToEquip.IsEquipped) return (false, -1, -1);
+            Item itemToEquip = inventory.FirstOrDefault(x => x.InstanceID == itemID);
+            if (itemToEquip == null || itemToEquip.Category == ItemCategory.Using || itemToEquip.Count < 1 || itemToEquip.IsEquipped)
+                return (false, -1, -1);
 
-                Item itemToUnequip = inventory.FirstOrDefault(x =>
-                    x.Category == itemToEquip.Category &&
-                    x.IsEquipped &&
-                    x.InstanceID != itemID); // 핵심: 방금 장착할 아이템은 제외
+            Item itemToUnequip = inventory.FirstOrDefault(x =>
+                x.Category == itemToEquip.Category &&
+                x.IsEquipped &&
+                x.InstanceID != itemID);
 
-                // 상태 변경
-                itemToEquip.IsEquipped = true;
-                if (itemToUnequip != null) itemToUnequip.IsEquipped = false;
+            bool dbSuccess = await _lobbyRespository.EquipAsync(uid, itemToEquip.InstanceID);
+            if (!dbSuccess)
+                return (false, -1, -1);
 
-                // 3. Redis 부분 업데이트 (최적화)
-                var changedEntries = new Dictionary<string, string>
-                {
-                     // 변경된 아이템(1~2개)만 직렬화하여 HSET으로 업데이트
-                     { itemToEquip.InstanceID.ToString(), JsonSerializer.Serialize(itemToEquip) }
-                };
+            await _redisHelper.DeleteKeyAsync(redisKey);
 
-                if (itemToUnequip != null)
-                {
-                    changedEntries.Add(itemToUnequip.InstanceID.ToString(), JsonSerializer.Serialize(itemToUnequip));
-                }
-
-                // 전체 덮어쓰기가 아닌 부분 업데이트(HSET) 수행
-                await _redisHelper.SetHashFieldsAsync(redisKey, changedEntries);
-                // 주의: _inventoryDataExpiry 갱신이 필요하다면 ExpireAsync를 별도로 호출
-
-                // 4. TODO: DB 최신화 큐에 삽입 (Item 상태 변경 내역 전달)
-                await _lobbyRespository.EquipAsync(uid, itemToEquip.InstanceID);
-
-                return (true, itemToEquip.InstanceID, itemToUnequip != null ? itemToUnequip.InstanceID : -1);
-            }
-            finally
-            {
-                await _redisHelper.ReleaseLockAsync(lockKey, lockToken);
-            }
+            return (true, itemToEquip.InstanceID, itemToUnequip != null ? itemToUnequip.InstanceID : -1);
         }
 
         public async Task<NicknameChangeResponse> ChangeNickname(long uid, string newNickname, long itemInstanceID)
