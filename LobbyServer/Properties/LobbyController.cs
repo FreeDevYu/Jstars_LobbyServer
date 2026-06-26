@@ -61,6 +61,7 @@ namespace LobbyServer.Properties
             return Ok(result);
         }
 
+        [RedisAuthorize]
         [HttpPost("RequestRegistMatching")]
         public async Task<IActionResult> Enqueue([FromBody] EnqueueMatchingRequest req)
         {
@@ -68,10 +69,27 @@ namespace LobbyServer.Properties
             return Ok(result);
         }
 
+        [RedisAuthorize]
         [HttpPost("RequestCancelMatching")]
         public async Task<IActionResult> Cancel([FromBody] CancelMatchingRequest req)
         {
             var result = await _lobbyService.CancelMatchingAsync(req);
+            return Ok(result);
+        }
+
+        [RedisAuthorize]
+        [HttpPost("RequestRegistPveMatching")]
+        public async Task<IActionResult> EnqueuePve([FromBody] EnqueueMatchingRequest req)
+        {
+            var result = await _lobbyService.EnqueuePveMatchingAsync(req);
+            return Ok(result);
+        }
+
+        [RedisAuthorize]
+        [HttpPost("RequestCancelPveMatching")]
+        public async Task<IActionResult> CancelPve([FromBody] CancelMatchingRequest req)
+        {
+            var result = await _lobbyService.CancelPveMatchingAsync(req);
             return Ok(result);
         }
     }

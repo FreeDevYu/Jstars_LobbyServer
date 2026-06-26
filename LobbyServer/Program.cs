@@ -10,6 +10,7 @@ using LobbyServer.BackgroundServices;
 using LobbyServer.Hubs;
 using LobbyServer.Helper;
 using LobbyServer.Services;
+using LobbyServer.Test;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,6 +42,7 @@ builder.Services.AddScoped<IAuthTokenHelper, AuthTokenHelper>();
 builder.Services.AddScoped<IEmailAuthHelper, EmailAuthHelper>();
 builder.Services.AddScoped<IUserHelper, UserHelper>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITestAuthService, TestAuthService>();
 builder.Services.AddHostedService<AuthEmailWorker>();
 
 
@@ -53,7 +55,9 @@ builder.Services.AddScoped<IRankingService, RankingService>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();
 builder.Services.AddScoped<IShopRespository, ShopRespository>();
 builder.Services.AddScoped<IShopService, ShopService>();
+builder.Services.AddSingleton<IMonitoringService, MonitoringService>();
 builder.Services.AddHostedService<MatchingRequestWorker>();
+builder.Services.AddHostedService<PveMatchingRequestWorker>();
 builder.Services.AddHostedService<MatchResponseWorker>();
 builder.Services.AddHostedService<MatchResultWorker>();
 builder.Services.AddHostedService<RankingRefreshWorker>();
@@ -83,6 +87,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 
 app.UseAuthorization();
 

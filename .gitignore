@@ -367,3 +367,7 @@ LobbyServer/appsettings.Development.json
 LobbyServer/appsettings.Production.json
 LobbyServer/.env.docker
 LobbyServer/.env.aws
+
+# FieldStressHarness secrets
+FieldStressHarness/accounts.json
+FieldStressHarness/harness.json

@@ -51,13 +51,6 @@ namespace LobbyServer.Services
             string email = request.Email;
             bool success = false;
 
-       //    // 이메일 중복 확인
-       //    var existingUserByEmail = await _userRepository.GetByEmailAsync(email);
-       //    if (existingUserByEmail != null)
-       //    {
-       //        return new EmailAuthResponse { Success = success };
-       //    }
-
             string authToken = GenerateUniqueToken();
             var dto = new EmailAuthDTO
             {

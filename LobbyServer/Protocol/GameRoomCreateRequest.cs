@@ -24,15 +24,17 @@ namespace Protocol {
     static GameRoomCreateRequestReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "ChtHYW1lUm9vbUNyZWF0ZVJlcXVlc3QucHJvdG8SCFByb3RvY29sIikKClBs",
-            "YXllckluZm8SCwoDVWlkGAEgASgEEg4KBlRlYW1JZBgCIAEoBSJNChFHYW1l",
-            "Um9vbUNyZWF0ZURUTxIRCglHYW1lTWFwSWQYASABKAUSJQoHUGxheWVycxgC",
-            "IAMoCzIULlByb3RvY29sLlBsYXllckluZm9iBnByb3RvMw=="));
+            "ChtHYW1lUm9vbUNyZWF0ZVJlcXVlc3QucHJvdG8SCFByb3RvY29sGhxHYW1l",
+            "Um9vbUNyZWF0ZVJlc3BvbnNlLnByb3RvIikKClBsYXllckluZm8SCwoDVWlk",
+            "GAEgASgEEg4KBlRlYW1JZBgCIAEoBSJ4ChFHYW1lUm9vbUNyZWF0ZURUTxIR",
+            "CglHYW1lTWFwSWQYASABKAUSKQoJZ2FtZV9tb2RlGAIgASgOMhYuUHJvdG9j",
+            "b2wuR2FtZU1vZGVUeXBlEiUKB1BsYXllcnMYAyADKAsyFC5Qcm90b2NvbC5Q",
+            "bGF5ZXJJbmZvYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
-          new pbr::FileDescriptor[] { },
+          new pbr::FileDescriptor[] { global::Protocol.GameRoomCreateResponseReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Protocol.PlayerInfo), global::Protocol.PlayerInfo.Parser, new[]{ "Uid", "TeamId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Protocol.GameRoomCreateDTO), global::Protocol.GameRoomCreateDTO.Parser, new[]{ "GameMapId", "Players" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Protocol.GameRoomCreateDTO), global::Protocol.GameRoomCreateDTO.Parser, new[]{ "GameMapId", "GameMode", "Players" }, null, null, null, null)
           }));
     }
     #endregion
@@ -316,6 +318,7 @@ namespace Protocol {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public GameRoomCreateDTO(GameRoomCreateDTO other) : this() {
       gameMapId_ = other.gameMapId_;
+      gameMode_ = other.gameMode_;
       players_ = other.players_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
@@ -341,10 +344,22 @@ namespace Protocol {
       }
     }
 
+    /// <summary>Field number for the "game_mode" field.</summary>
+    public const int GameModeFieldNumber = 2;
+    private global::Protocol.GameModeType gameMode_ = global::Protocol.GameModeType.GameModeUnspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Protocol.GameModeType GameMode {
+      get { return gameMode_; }
+      set {
+        gameMode_ = value;
+      }
+    }
+
     /// <summary>Field number for the "Players" field.</summary>
-    public const int PlayersFieldNumber = 2;
+    public const int PlayersFieldNumber = 3;
     private static readonly pb::FieldCodec<global::Protocol.PlayerInfo> _repeated_players_codec
-        = pb::FieldCodec.ForMessage(18, global::Protocol.PlayerInfo.Parser);
+        = pb::FieldCodec.ForMessage(26, global::Protocol.PlayerInfo.Parser);
     private readonly pbc::RepeatedField<global::Protocol.PlayerInfo> players_ = new pbc::RepeatedField<global::Protocol.PlayerInfo>();
     /// <summary>
     /// 방에 입장할 전체 유저 목록
@@ -371,6 +386,7 @@ namespace Protocol {
         return true;
       }
       if (GameMapId != other.GameMapId) return false;
+      if (GameMode != other.GameMode) return false;
       if(!players_.Equals(other.players_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -380,6 +396,7 @@ namespace Protocol {
     public override int GetHashCode() {
       int hash = 1;
       if (GameMapId != 0) hash ^= GameMapId.GetHashCode();
+      if (GameMode != global::Protocol.GameModeType.GameModeUnspecified) hash ^= GameMode.GetHashCode();
       hash ^= players_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -403,6 +420,10 @@ namespace Protocol {
         output.WriteRawTag(8);
         output.WriteInt32(GameMapId);
       }
+      if (GameMode != global::Protocol.GameModeType.GameModeUnspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) GameMode);
+      }
       players_.WriteTo(output, _repeated_players_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -418,6 +439,10 @@ namespace Protocol {
         output.WriteRawTag(8);
         output.WriteInt32(GameMapId);
       }
+      if (GameMode != global::Protocol.GameModeType.GameModeUnspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) GameMode);
+      }
       players_.WriteTo(ref output, _repeated_players_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -431,6 +456,9 @@ namespace Protocol {
       int size = 0;
       if (GameMapId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeInt32Size(GameMapId);
+      }
+      if (GameMode != global::Protocol.GameModeType.GameModeUnspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) GameMode);
       }
       size += players_.CalculateSize(_repeated_players_codec);
       if (_unknownFields != null) {
@@ -447,6 +475,9 @@ namespace Protocol {
       }
       if (other.GameMapId != 0) {
         GameMapId = other.GameMapId;
+      }
+      if (other.GameMode != global::Protocol.GameModeType.GameModeUnspecified) {
+        GameMode = other.GameMode;
       }
       players_.Add(other.players_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -472,7 +503,11 @@ namespace Protocol {
             GameMapId = input.ReadInt32();
             break;
           }
-          case 18: {
+          case 16: {
+            GameMode = (global::Protocol.GameModeType) input.ReadEnum();
+            break;
+          }
+          case 26: {
             players_.AddEntriesFrom(input, _repeated_players_codec);
             break;
           }
@@ -499,7 +534,11 @@ namespace Protocol {
             GameMapId = input.ReadInt32();
             break;
           }
-          case 18: {
+          case 16: {
+            GameMode = (global::Protocol.GameModeType) input.ReadEnum();
+            break;
+          }
+          case 26: {
             players_.AddEntriesFrom(ref input, _repeated_players_codec);
             break;
           }

@@ -1,0 +1,15 @@
+{
+  "accounts": [
+    {
+      "label": "bot-01",
+      "id": "your_test_id_1",
+      "password": "your_password_1",
+      "deviceId": "stress-bot-01"
+    },
+    {
+      "label": "bot-02",
+      "id": "your_test_id_2",
+      "password": "your_password_2",
+      "deviceId": "stress-bot-02"
+    }
+  ]}

@@ -154,15 +154,12 @@ namespace LobbyServer.BackgroundServices
                 resultDTO.WinPlayers.Count + resultDTO.LosePlayers.Count,
                 string.Join(", ", uids));
 
-            var keys = uids.Select(uid => (RedisKey)$"SignalRConn:{uid}").ToArray();
-            var connectionIds = await db.StringGetAsync(keys);
-
             int sentCount = 0;
             int skippedCount = 0;
 
-            var sendTasks = uids.Select(async (uid, index) =>
+            var sendTasks = uids.Select(async uid =>
             {
-                var connectionId = connectionIds[index];
+                var connectionId = await db.StringGetAsync((RedisKey)$"SignalRConn:{uid}");
                 if (connectionId.IsNullOrEmpty)
                 {
                     Interlocked.Increment(ref skippedCount);

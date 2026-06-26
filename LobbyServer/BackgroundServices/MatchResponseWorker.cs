@@ -1,4 +1,4 @@
-﻿using LobbyAPI.Models;
+using LobbyAPI.Models;
 using LobbyServer.Hubs; 
 using Microsoft.AspNetCore.SignalR;
 using ProtoBuf;
@@ -43,24 +43,27 @@ namespace LobbyServer.BackgroundServices
                     try
                     {
                         GameRoomCreateResponse responseDto = GameRoomCreateResponse.Parser.ParseFrom((byte[])message);
-                        _logger.LogInformation($"[방 생성 수신] RoomID: {responseDto.Roomid}");
+                        _logger.LogInformation(
+                            $"[방 생성 수신] RoomID: {responseDto.Roomid}, MapID: {responseDto.Mapid}, GameMode: {responseDto.GameMode}, Uids: {string.Join(", ", responseDto.Uids)}");
 
-                        // 2. Redis에서 여러 ConnectionId를 한 번에 조회 (성능 최적화)
-                        var keys = responseDto.Uids.Select(uid => (RedisKey)$"SignalRConn:{uid}").ToArray();
-                        var connectionIds = await db.StringGetAsync(keys);
-
-                        var sendTasks = responseDto.Uids.Select(async (uid, index) =>
+                        // Redis Cluster: multi-key MGET는 서로 다른 slot이면 실패 (PVP 2인 매칭)
+                        var sendTasks = responseDto.Uids.Select(async uid =>
                         {
-                            var connectionId = connectionIds[index];
-                            if (!connectionId.IsNullOrEmpty)
+                            var connectionId = await db.StringGetAsync((RedisKey)$"SignalRConn:{uid}");
+                            if (connectionId.IsNullOrEmpty)
                             {
-                                await _hubContext.Clients.Client(connectionId!).SendAsync("MatchSuccess", new
-                                {
-                                    Ip = responseDto.Ip,
-                                    Port = responseDto.Port,
-                                    RoomID = responseDto.Roomid
-                                }, stoppingToken); // 토큰 전달
+                                _logger.LogWarning("[MatchSuccess] 전송 스킵: SignalR 미연결. Uid={Uid}", uid);
+                                return;
                             }
+
+                            await _hubContext.Clients.Client(connectionId!).SendAsync("MatchSuccess", new
+                            {
+                                Ip = responseDto.Ip,
+                                Port = responseDto.Port,
+                                RoomID = responseDto.Roomid,
+                                MapID = responseDto.Mapid,
+                                GameMode = (int)responseDto.GameMode
+                            }, stoppingToken);
                         });
 
                         await Task.WhenAll(sendTasks);

@@ -1,4 +1,4 @@
-﻿using LobbyAPI.Models;
+using LobbyAPI.Models;
 using LobbyServer.Helper;
 using LobbyServer.Models;
 
@@ -13,6 +13,8 @@ namespace LobbyServer.Services
         Task<NicknameChangeResponse> NicknameChangeAsync(NicknameChangeRequest request);
         Task<EnqueueMatchingResponse> EnqueueMatchingAsync(EnqueueMatchingRequest request);
         Task<CancelMatchingResponse> CancelMatchingAsync(CancelMatchingRequest request);
+        Task<EnqueueMatchingResponse> EnqueuePveMatchingAsync(EnqueueMatchingRequest request);
+        Task<CancelMatchingResponse> CancelPveMatchingAsync(CancelMatchingRequest request);
     }
 
     public class LobbyService : ILobbyService
@@ -92,18 +94,20 @@ namespace LobbyServer.Services
 
         public async Task<CancelMatchingResponse> CancelMatchingAsync(CancelMatchingRequest request)
         {
-            await _matchigHelper.CancelMatchingQueue(request.UID);
-            return new CancelMatchingResponse { Success = false };
+            bool success = await _matchigHelper.CancelMatchingQueue(request.UID);
+            return new CancelMatchingResponse { Success = success };
+        }
+
+        public async Task<EnqueueMatchingResponse> EnqueuePveMatchingAsync(EnqueueMatchingRequest request)
+        {
+            bool success = await _matchigHelper.EnqueuePveMatchingQueue(request.UID);
+            return new EnqueueMatchingResponse { Success = success };
+        }
+
+        public async Task<CancelMatchingResponse> CancelPveMatchingAsync(CancelMatchingRequest request)
+        {
+            bool success = await _matchigHelper.CancelPveMatchingQueue(request.UID);
+            return new CancelMatchingResponse { Success = success };
         }
     }
 }
-
-//할일
-/*
- 1. 장비리스트 전달.
- 2. 닉네임변경요청
- -> 클라이언트와 로비서버 연결필요
- 3. pvp 게임룸생성 -> 로비서버가 필드서버와 연락필요
- 4. pve 진행요청
- 5. 
- */

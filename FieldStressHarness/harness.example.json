@@ -1,0 +1,23 @@
+{
+  "lobbyBaseUrl": "http://43.201.18.30:5242/api",
+  "accountsFile": "accounts.json",
+  "register": {
+    "count": 10,
+    "idPrefix": "stress",
+    "email": "your-address@example.com",
+    "password": "TestPass123!",
+    "saveToAccountsFile": true,
+    "appendToAccountsFile": false
+  },
+  "match": {
+    "type": "pve",
+    "timeoutSeconds": 120,
+    "parallelism": 2
+  },
+  "field": {
+    "gameplay": "combat_basic",
+    "sessionSeconds": 60,
+    "heartbeatIntervalMs": 5000,
+    "combatStepIntervalMs": 1000
+  }
+}
