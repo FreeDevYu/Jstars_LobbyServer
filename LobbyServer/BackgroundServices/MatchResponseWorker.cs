@@ -1,5 +1,6 @@
 using LobbyAPI.Models;
 using LobbyServer.Hubs; 
+using LobbyServer.Services;
 using Microsoft.AspNetCore.SignalR;
 using ProtoBuf;
 using Protocol;
@@ -13,6 +14,7 @@ namespace LobbyServer.BackgroundServices
         private readonly IConnectionMultiplexer _redis;
         private readonly IHubContext<SignalRHub> _hubContext;
         private readonly ILogger<MatchResponseWorker> _logger;
+        private readonly IMatchLatencyMetrics _matchLatencyMetrics;
 
         // 구독할 레디스 채널명 (C++의 PUBLISH 채널과 100% 동일해야 함)
         private const string MatchCompleteChannel = "Channel:MatchComplete";
@@ -20,11 +22,13 @@ namespace LobbyServer.BackgroundServices
         public MatchResponseWorker(
             IConnectionMultiplexer redis,
             IHubContext<SignalRHub> hubContext,
-            ILogger<MatchResponseWorker> logger)
+            ILogger<MatchResponseWorker> logger,
+            IMatchLatencyMetrics matchLatencyMetrics)
         {
             _redis = redis;
             _hubContext = hubContext;
             _logger = logger;
+            _matchLatencyMetrics = matchLatencyMetrics;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -52,6 +56,7 @@ namespace LobbyServer.BackgroundServices
                             var connectionId = await db.StringGetAsync((RedisKey)$"SignalRConn:{uid}");
                             if (connectionId.IsNullOrEmpty)
                             {
+                                await _matchLatencyMetrics.CancelPendingAsync((long)uid);
                                 _logger.LogWarning("[MatchSuccess] 전송 스킵: SignalR 미연결. Uid={Uid}", uid);
                                 return;
                             }
@@ -64,6 +69,8 @@ namespace LobbyServer.BackgroundServices
                                 MapID = responseDto.Mapid,
                                 GameMode = (int)responseDto.GameMode
                             }, stoppingToken);
+
+                            await _matchLatencyMetrics.TryRecordSuccessAsync((long)uid);
                         });
 
                         await Task.WhenAll(sendTasks);

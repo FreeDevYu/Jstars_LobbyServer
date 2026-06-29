@@ -1,6 +1,8 @@
 {
   "lobbyBaseUrl": "http://43.201.18.30:5242/api",
   "accountsFile": "accounts.json",
+
+  // --mode register 전용 (full/login은 accounts.json만 사용)
   "register": {
     "count": 10,
     "idPrefix": "stress",
@@ -9,14 +11,24 @@
     "saveToAccountsFile": true,
     "appendToAccountsFile": false
   },
-  "match": {
-    "type": "pve",
-    "timeoutSeconds": 120,
-    "parallelism": 2
+
+  // 대기/타임아웃 (초) — Harness 전 구간 한곳에서 관리
+  "timeouts": {
+    "lobbyHttpSeconds": 30, // 로비 REST (로그인, 캐릭터/인벤, 매칭 enqueue) HTTP 타임아웃
+    "matchSuccessSeconds": 180, // 매칭 enqueue 후 SignalR MatchSuccess 최대 대기
+    "fieldAuthSeconds": 60, // 필드 TCP 연결 후 RESPONSE_AUTH 최대 대기
+    "gameStartSeconds": 30, // EnterGameRoom(isReady) 후 NOTICE_GAME_START 최대 대기
+    "fieldSessionSeconds": 60 // 필드 인게임 유지 시간
   },
+
+  "match": {
+    "type": "pve", // pve | pvp
+    "parallelism": 2, // 동시 테스트 봇 수 상한 (login / match / full)
+    "loginMatchBatchSize": 20 // full 모드 — 로그인+매칭 동시 상한 (필드/전투는 제한 없음)
+  },
+
   "field": {
-    "gameplay": "combat_basic",
-    "sessionSeconds": 60,
+    "gameplay": "combat_basic", // idle | combat_basic
     "heartbeatIntervalMs": 5000,
     "combatStepIntervalMs": 1000
   }

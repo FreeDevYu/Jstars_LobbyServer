@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FieldStressHarness.Models;
 using FieldStressHarness.Protocol;
 using FieldStressHarness.Services;
@@ -38,21 +39,47 @@ internal static class Program
             }
 
             var accountsDocument = ConfigLoader.LoadAccounts(accountsPath);
-            Console.WriteLine($"[Harness] accounts={accountsPath} ({accountsDocument.Accounts.Count})");
+            var testAccounts = TakeTestAccounts(harnessConfig, accountsDocument.Accounts);
+            Console.WriteLine(
+                $"[Harness] accounts={accountsPath} ({accountsDocument.Accounts.Count} in file, running {testAccounts.Count})");
 
             if (harnessConfig.IsLoginMode(mode))
             {
-                return await RunLoginOnlyAsync(harnessConfig, accountsDocument.Accounts);
+                Console.WriteLine($"[Harness] login parallelism={harnessConfig.Match.Parallelism} | max {LoginRetry.MaxRetries} login retries per account");
+                Console.WriteLine();
+                return await RunLoginOnlyAsync(harnessConfig, testAccounts);
             }
 
-            Console.WriteLine($"[Harness] match={harnessConfig.Match.Type} | field={harnessConfig.Field.Gameplay} | parallelism={harnessConfig.Match.Parallelism}");
-            if (harnessConfig.IsPveMatch && accountsDocument.Accounts.Count > 1)
+            if (harnessConfig.IsMatchMode(mode))
+            {
+                Console.WriteLine($"[Harness] match={harnessConfig.Match.Type} | parallelism={harnessConfig.Match.Parallelism} | max {LoginRetry.MaxRetries} login retries per account");
+                Console.WriteLine($"[Harness] timeouts: lobbyHttp={harnessConfig.LobbyHttpTimeoutSeconds}s | matchSuccess={harnessConfig.MatchTimeoutSeconds}s | fieldAuth={harnessConfig.FieldAuthTimeoutSeconds}s");
+                if (harnessConfig.IsPveMatch && testAccounts.Count > 1)
+                {
+                    Console.WriteLine("[Harness] Note: PvE = one solo room per account.");
+                }
+                Console.WriteLine();
+
+                return await RunBotBatchAsync(
+                    harnessConfig,
+                    testAccounts,
+                    HarnessRunPhase.MatchOnly,
+                    "MATCH COMPLETE");
+            }
+
+            Console.WriteLine($"[Harness] match={harnessConfig.Match.Type} | field={harnessConfig.Field.Gameplay} | parallelism={harnessConfig.Match.Parallelism} | login/match batch={harnessConfig.LoginMatchBatchSize}");
+            Console.WriteLine($"[Harness] timeouts: lobbyHttp={harnessConfig.LobbyHttpTimeoutSeconds}s | matchSuccess={harnessConfig.MatchTimeoutSeconds}s | fieldAuth={harnessConfig.FieldAuthTimeoutSeconds}s | gameStart={harnessConfig.GameStartTimeoutSeconds}s | fieldSession={harnessConfig.FieldSessionSeconds}s");
+            if (harnessConfig.IsPveMatch && testAccounts.Count > 1)
             {
                 Console.WriteLine("[Harness] Note: PvE = one solo room per account.");
             }
             Console.WriteLine();
 
-            return await RunFullFlowAsync(harnessConfig, accountsDocument.Accounts);
+            return await RunBotBatchAsync(
+                harnessConfig,
+                testAccounts,
+                HarnessRunPhase.Full,
+                "FULL FLOW COMPLETE");
         }
         catch (Exception ex)
         {
@@ -63,37 +90,73 @@ internal static class Program
 
     private static async Task<int> RunLoginOnlyAsync(HarnessConfig config, IReadOnlyList<AccountEntry> accounts)
     {
-        using var lobbyApi = new LobbyApiClient(config.LobbyBaseUrl);
-        int successCount = 0;
+        var stopwatch = Stopwatch.StartNew();
+        using var lobbyApi = new LobbyApiClient(
+            config.LobbyBaseUrl,
+            TimeSpan.FromSeconds(config.LobbyHttpTimeoutSeconds));
+        using var semaphore = new SemaphoreSlim(Math.Max(1, config.LoginParallelism));
+        var consoleLock = new object();
 
-        foreach (var (account, index) in accounts.Select((entry, index) => (entry, index)))
-        {
-            var label = string.IsNullOrWhiteSpace(account.Label) ? account.Id : account.Label;
-            var deviceId = string.IsNullOrWhiteSpace(account.DeviceId)
-                ? $"stress-bot-{index + 1:D2}"
-                : account.DeviceId!;
+        var outcomes = await Task.WhenAll(accounts.Select((account, index) =>
+            LoginAccountAsync(
+                account, index, lobbyApi, semaphore, consoleLock)));
 
-            try
-            {
-                var (response, elapsedMs) = await lobbyApi.LoginAsync(account, deviceId);
-                if (response.State != LoginResultState.Success || response.User == null || string.IsNullOrWhiteSpace(response.Token))
-                {
-                    Console.WriteLine($"[FAIL] {label} | state={response.State} | {elapsedMs}ms");
-                    continue;
-                }
+        stopwatch.Stop();
+        int successCount = outcomes.Count(outcome => outcome.Success);
+        var loginFailureHistogram = BuildLoginFailureHistogram(
+            outcomes.Select(outcome => outcome.LoginFailureCount));
 
-                successCount++;
-                Console.WriteLine($"[OK]   {label} | uid={response.User.UID} | nick={response.User.NickName} | token={MaskToken(response.Token)} | {elapsedMs}ms");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[FAIL] {label} | {ex.Message}");
-            }
-        }
-
-        Console.WriteLine();
-        Console.WriteLine($"[Harness] Login complete: {successCount}/{accounts.Count} succeeded.");
+        HarnessLog.PrintBatchSummary(
+            "LOGIN COMPLETE",
+            successCount,
+            accounts.Count,
+            FormatElapsed(stopwatch.Elapsed),
+            loginFailureHistogram);
         return successCount == accounts.Count ? 0 : 1;
+    }
+
+    private sealed record LoginOutcome(bool Success, int LoginFailureCount);
+
+    private static async Task<LoginOutcome> LoginAccountAsync(
+        AccountEntry account,
+        int index,
+        LobbyApiClient lobbyApi,
+        SemaphoreSlim semaphore,
+        object consoleLock)
+    {
+        string label = string.IsNullOrWhiteSpace(account.Label) ? account.Id : account.Label;
+        var deviceId = string.IsNullOrWhiteSpace(account.DeviceId)
+            ? $"stress-bot-{index + 1:D2}"
+            : account.DeviceId!;
+
+        await semaphore.WaitAsync();
+        try
+        {
+            var (response, elapsedMs, failedAttempts) = await LoginRetry.UntilSuccessAsync(
+                lobbyApi, account, deviceId, label);
+            lock (consoleLock)
+            {
+                string retryNote = failedAttempts > 0 ? $" | login failed {failedAttempts} time(s) before success" : string.Empty;
+                Console.WriteLine(
+                    $"[OK]   {label} | uid={response.User!.UID} | nick={response.User.NickName} | token={MaskToken(response.Token!)}{retryNote} | {elapsedMs}ms");
+            }
+
+            return new LoginOutcome(true, failedAttempts);
+        }
+        catch (LoginPermanentFailureException ex)
+        {
+            lock (consoleLock)
+            {
+                Console.WriteLine(
+                    $"[FAIL] {label} | state={ex.State} | login failed {ex.FailedAttempts} time(s) (not retryable) | {ex.ElapsedMs}ms");
+            }
+
+            return new LoginOutcome(false, ex.FailedAttempts);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     private static async Task<int> RunRegisterAsync(HarnessConfig config, string accountsOutputPath)
@@ -115,7 +178,11 @@ internal static class Program
         return created.Count == config.Register.Count ? 0 : 1;
     }
 
-    private static async Task<int> RunFullFlowAsync(HarnessConfig config, IReadOnlyList<AccountEntry> accounts)
+    private static async Task<int> RunBotBatchAsync(
+        HarnessConfig config,
+        IReadOnlyList<AccountEntry> accounts,
+        HarnessRunPhase phase,
+        string summaryTitle)
     {
         if (!config.IsPveMatch && accounts.Count < 2)
         {
@@ -123,55 +190,123 @@ internal static class Program
             return 2;
         }
 
-        using var lobbyApi = new LobbyApiClient(config.LobbyBaseUrl);
-        using var semaphore = new SemaphoreSlim(Math.Max(1, config.LoginParallelism));
+        using var lobbyApi = new LobbyApiClient(
+            config.LobbyBaseUrl,
+            TimeSpan.FromSeconds(config.LobbyHttpTimeoutSeconds));
+        using var runGate = phase == HarnessRunPhase.Full
+            ? null
+            : new SemaphoreSlim(Math.Max(1, config.LoginParallelism));
+        using var loginMatchGate = phase == HarnessRunPhase.Full
+            ? new SemaphoreSlim(config.LoginMatchBatchSize)
+            : null;
         var botSession = new BotSession();
         var reports = new BotRunReport?[accounts.Count];
 
+        var stopwatch = Stopwatch.StartNew();
         var tasks = accounts.Select(async (account, index) =>
         {
-            await semaphore.WaitAsync();
+            if (runGate != null)
+            {
+                await runGate.WaitAsync();
+            }
+
             try
             {
                 var deviceId = string.IsNullOrWhiteSpace(account.DeviceId)
                     ? $"stress-bot-{index + 1:D2}"
                     : account.DeviceId!;
 
-                reports[index] = await botSession.RunAsync(account, index, deviceId, config, lobbyApi);
+                reports[index] = await botSession.RunAsync(
+                    account, index, deviceId, config, lobbyApi, phase, loginMatchGate);
             }
             finally
             {
-                semaphore.Release();
+                runGate?.Release();
             }
         });
 
         await Task.WhenAll(tasks);
+        stopwatch.Stop();
 
         var finalReports = reports.Where(report => report != null).Select(report => report!).ToList();
         int successCount = finalReports.Count(report => report.Result == BotRunResult.Success);
 
-        Console.WriteLine();
-        foreach (var report in finalReports)
-        {
-            string matchInfo = report.Match == null
-                ? "-"
-                : $"{report.Match.Ip}:{report.Match.Port} room={report.Match.RoomId}";
+        var failedReports = finalReports
+            .Where(report => report.Result != BotRunResult.Success)
+            .ToList();
 
-            if (report.Result == BotRunResult.Success)
+        if (failedReports.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"[Harness] {failedReports.Count} bot(s) failed:");
+            foreach (var report in failedReports)
             {
+                string matchInfo = report.Match == null
+                    ? "-"
+                    : $"{report.Match.Ip}:{report.Match.Port} room={report.Match.RoomId}";
+
                 Console.WriteLine(
-                    $"[DONE] {report.Label} | OK | match={matchInfo} | sent={report.SentPackets} recv={report.ReceivedPackets}");
-            }
-            else
-            {
-                Console.WriteLine(
-                    $"[DONE] {report.Label} | {report.Result} | {report.Detail} | match={matchInfo}");
+                    $"[FAIL] {report.Label} | {report.Result} | {report.Detail} | match={matchInfo}");
             }
         }
 
-        Console.WriteLine();
-        Console.WriteLine($"[Harness] Full flow complete: {successCount}/{accounts.Count} succeeded.");
+        if (phase == HarnessRunPhase.MatchOnly)
+        {
+            var loginRetriedReports = finalReports
+                .Where(report => report.Result == BotRunResult.Success && report.LoginFailureCount > 0)
+                .ToList();
+
+            if (loginRetriedReports.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"[Harness] {loginRetriedReports.Count} bot(s) recovered after login retry:");
+                foreach (var report in loginRetriedReports)
+                {
+                    string matchInfo = report.Match == null
+                        ? "-"
+                        : $"{report.Match.Ip}:{report.Match.Port} room={report.Match.RoomId}";
+
+                    Console.WriteLine(
+                        $"[LOGIN-RETRY] {report.Label} | login failed {report.LoginFailureCount} time(s) before success | match={matchInfo}");
+                }
+            }
+        }
+
+        var loginFailureHistogram = BuildLoginFailureHistogram(
+            finalReports.Select(report => report.LoginFailureCount));
+
+        HarnessLog.PrintBatchSummary(
+            summaryTitle,
+            successCount,
+            accounts.Count,
+            FormatElapsed(stopwatch.Elapsed),
+            phase == HarnessRunPhase.MatchOnly ? loginFailureHistogram : null);
         return successCount == accounts.Count ? 0 : 1;
+    }
+
+    private static Dictionary<int, int> BuildLoginFailureHistogram(IEnumerable<int> loginFailureCounts) =>
+        loginFailureCounts
+            .GroupBy(count => count)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+    private static List<AccountEntry> TakeTestAccounts(
+        HarnessConfig config,
+        IReadOnlyList<AccountEntry> accounts) =>
+        accounts.Take(config.ResolveTestAccountCount(accounts.Count)).ToList();
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalHours >= 1)
+        {
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m {elapsed.Seconds}.{elapsed.Milliseconds:D3}s";
+        }
+
+        if (elapsed.TotalMinutes >= 1)
+        {
+            return $"{elapsed.Minutes}m {elapsed.Seconds}.{elapsed.Milliseconds:D3}s";
+        }
+
+        return $"{elapsed.TotalSeconds:F1}s";
     }
 
     private static string ResolveRunMode(CliOptions options)
@@ -179,7 +314,7 @@ internal static class Program
         string? raw = options.Mode;
         if (string.IsNullOrWhiteSpace(raw))
         {
-            Console.Write("mode (register / login / full): ");
+            Console.Write("mode (register / login / match / full): ");
             raw = Console.ReadLine();
         }
 
@@ -285,17 +420,18 @@ internal static class Program
                 FieldStressHarness
 
                 Usage:
-                  dotnet run --project FieldStressHarness -- --mode <register|login|full> [options]
+                  dotnet run --project FieldStressHarness -- --mode <register|login|match|full> [options]
 
                 mode (required — pass on CLI or type when prompted):
                   register   create accounts -> accounts.json
-                  login      login test only
-                  full       login -> match -> field
+                  login      concurrent login test (retry until all succeed)
+                  match      login -> match -> field AUTH
+                  full       login -> match -> field (in-game session)
 
                 Settings: harness.json (one file, all sections)
 
                 Options:
-                  --mode <name>       register | login | full
+                  --mode <name>       register | login | match | full
                   --config <path>     default: harness.json
                   --accounts <path>   accounts.json
                   --lobby <url>

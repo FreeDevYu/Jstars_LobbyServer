@@ -55,6 +55,7 @@ builder.Services.AddScoped<IRankingService, RankingService>();
 builder.Services.AddScoped<ILobbyService, LobbyService>();
 builder.Services.AddScoped<IShopRespository, ShopRespository>();
 builder.Services.AddScoped<IShopService, ShopService>();
+builder.Services.AddSingleton<IMatchLatencyMetrics, MatchLatencyMetrics>();
 builder.Services.AddSingleton<IMonitoringService, MonitoringService>();
 builder.Services.AddHostedService<MatchingRequestWorker>();
 builder.Services.AddHostedService<PveMatchingRequestWorker>();

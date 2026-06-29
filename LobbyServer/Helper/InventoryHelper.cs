@@ -12,6 +12,7 @@ namespace LobbyServer.Helper
         Task<(bool result, long equipped, long unequipped)> EquipItem(long uid, long itemID);
         Task<NicknameChangeResponse> ChangeNickname(long uid, string newNickname, long itemInstanceID);
         Task<bool> AddItemToCacheAsync(long uid, Item item);
+        Task SyncInventoryCacheFromDbAsync(long uid);
     }
 
     public class InventoryHelper : IInventoryHelper
@@ -82,9 +83,38 @@ namespace LobbyServer.Helper
             if (!dbSuccess)
                 return (false, -1, -1);
 
-            await _redisHelper.DeleteKeyAsync(redisKey);
+            itemToEquip.IsEquipped = true;
+            var cacheUpdates = new Dictionary<string, string>
+            {
+                { itemToEquip.InstanceID.ToString(), JsonSerializer.Serialize(itemToEquip) }
+            };
+
+            if (itemToUnequip != null)
+            {
+                itemToUnequip.IsEquipped = false;
+                cacheUpdates[itemToUnequip.InstanceID.ToString()] = JsonSerializer.Serialize(itemToUnequip);
+            }
+
+            await _redisHelper.SetHashFieldsAsync(redisKey, cacheUpdates, _inventoryDataExpiry);
 
             return (true, itemToEquip.InstanceID, itemToUnequip != null ? itemToUnequip.InstanceID : -1);
+        }
+
+        public async Task SyncInventoryCacheFromDbAsync(long uid)
+        {
+            string redisKey = $"inventory:{uid}";
+            await _redisHelper.DeleteKeyAsync(redisKey);
+
+            var dbData = await _lobbyRespository.GetInventoryListByUIDAsync(uid);
+            var items = dbData.ToList();
+            if (items.Count == 0)
+                return;
+
+            var hashEntries = items.ToDictionary(
+                item => item.InstanceID.ToString(),
+                item => JsonSerializer.Serialize(item));
+
+            await _redisHelper.SetHashFieldsAsync(redisKey, hashEntries, _inventoryDataExpiry);
         }
 
         public async Task<NicknameChangeResponse> ChangeNickname(long uid, string newNickname, long itemInstanceID)
@@ -134,12 +164,12 @@ namespace LobbyServer.Helper
                 }
 
                 NicknameChangeResult result = await _lobbyRespository.NicknameChangeAsync(uid, newNickname, subCategory, itemInstanceID);
+                response.Result = result;
 
                 if (result == NicknameChangeResult.Success)
                 {
                     nicknameCoupon.Count--;
 
-                    response.Result = NicknameChangeResult.Success;
                     response.UID = uid;
                     response.RemainCount = nicknameCoupon.Count;
                     response.ResultNickname = newNickname;

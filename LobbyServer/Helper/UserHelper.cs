@@ -131,6 +131,7 @@ namespace LobbyServer.Helper
                     return false;
             }
 
+            await _inventoryHelper.SyncInventoryCacheFromDbAsync(uid);
             return true;
         }
 

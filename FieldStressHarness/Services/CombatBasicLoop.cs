@@ -8,7 +8,7 @@ public static class CombatBasicLoop
 {
     private static readonly string[] StepNames = ["forward+shot", "right+shot", "back+shot", "left+special", "reload"];
 
-    public static async Task RunAsync(
+    public static async Task<bool> RunAsync(
         string label,
         FieldTcpSession field,
         long uid,
@@ -28,17 +28,19 @@ public static class CombatBasicLoop
 
         while (DateTime.UtcNow < sessionEndAt && !cancellationToken.IsCancellationRequested)
         {
+            if (FieldHeartbeat.IsDisconnected(field))
+            {
+                HarnessLog.Info(label, "Field TCP disconnected");
+                return false;
+            }
+
             if (field.TryTake(Content.NOTICE_GAME_END, out _))
             {
                 HarnessLog.Info(label, "NOTICE_GAME_END");
-                return;
+                return true;
             }
 
-            if (DateTime.UtcNow >= nextHeartbeatAt)
-            {
-                field.Send(FieldPacketBuilder.RequestHeartbeat(Environment.TickCount64));
-                nextHeartbeatAt = DateTime.UtcNow.AddMilliseconds(config.HeartbeatIntervalMs);
-            }
+            FieldHeartbeat.TrySend(field, config.HeartbeatIntervalMs, ref nextHeartbeatAt);
 
             if (DateTime.UtcNow >= nextStepAt)
             {
@@ -79,5 +81,6 @@ public static class CombatBasicLoop
         }
 
         HarnessLog.Info(label, $"combat_basic finished ({config.FieldSessionSeconds}s)");
+        return true;
     }
 }

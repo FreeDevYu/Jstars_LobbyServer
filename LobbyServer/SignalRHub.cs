@@ -14,7 +14,20 @@ namespace LobbyServer.Hubs
 
         public override async Task OnConnectedAsync()
         {
-            var uid = Context.GetHttpContext().Request.Query["uid"].ToString();
+            var uid = Context.GetHttpContext()?.Request.Query["uid"].ToString();
+            if (string.IsNullOrWhiteSpace(uid) || !long.TryParse(uid, out _))
+            {
+                Context.Abort();
+                return;
+            }
+
+            string? previousConnectionId = await _redisHelper.GetValueAsync($"SignalRConn:{uid}");
+            if (!string.IsNullOrEmpty(previousConnectionId) &&
+                !string.Equals(previousConnectionId, Context.ConnectionId, StringComparison.Ordinal))
+            {
+                await _redisHelper.DeleteKeyAsync($"ConnToUid:{previousConnectionId}");
+            }
+
             await _redisHelper.SetKeyValueAsync($"SignalRConn:{uid}", Context.ConnectionId);
             await _redisHelper.SetKeyValueAsync($"ConnToUid:{Context.ConnectionId}", uid);
 

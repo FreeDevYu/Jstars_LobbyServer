@@ -1,5 +1,6 @@
 using LobbyServer.Helper;
 using LobbyServer.Hubs;
+using LobbyServer.Services;
 using Microsoft.AspNetCore.SignalR;
 using Protocol;
 using StackExchange.Redis;
@@ -12,6 +13,7 @@ namespace LobbyServer.BackgroundServices
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<SignalRHub> _hubContext;
         private readonly ILogger<MatchingRequestWorker> _logger; // 로거 주입 권장
+        private readonly IMatchLatencyMetrics _matchLatencyMetrics;
 
         private const string QueueKey = "MatchingQueue_ZSET";
         //private const double MATCH_RANGE = 5.0; // 승률 오차범위 ±5% 이내 매칭
@@ -25,12 +27,14 @@ namespace LobbyServer.BackgroundServices
             IConnectionMultiplexer redis,
             IServiceScopeFactory scopeFactory,
             IHubContext<SignalRHub> hubContext,
-            ILogger<MatchingRequestWorker> logger)
+            ILogger<MatchingRequestWorker> logger,
+            IMatchLatencyMetrics matchLatencyMetrics)
         {
             _redis = redis;
             _scopeFactory = scopeFactory;
             _hubContext = hubContext;
             _logger = logger;
+            _matchLatencyMetrics = matchLatencyMetrics;
 
             _matchingScript = MatchingLuaScripts.MatchPlayers;
         }
@@ -80,6 +84,7 @@ namespace LobbyServer.BackgroundServices
                             }
                             else
                             {
+                                await _matchLatencyMetrics.CancelPendingManyAsync(matchedUids);
                                 _logger.LogWarning(
                                     "[PvP 매칭 실패] UID: {Uids} (플레이어 데이터 캐싱 또는 방 생성 실패)",
                                     string.Join(", ", matchedUids));

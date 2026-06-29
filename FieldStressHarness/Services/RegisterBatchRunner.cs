@@ -10,7 +10,9 @@ public sealed class RegisterBatchRunner
         string accountsOutputPath,
         CancellationToken cancellationToken = default)
     {
-        using var lobbyApi = new LobbyApiClient(config.LobbyBaseUrl);
+        using var lobbyApi = new LobbyApiClient(
+            config.LobbyBaseUrl,
+            TimeSpan.FromSeconds(config.LobbyHttpTimeoutSeconds));
         var created = new List<AccountEntry>();
         int count = Math.Max(1, config.Register.Count);
         string password = config.Register.Password;

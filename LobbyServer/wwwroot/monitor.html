@@ -63,6 +63,10 @@
     }
     .card .label { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
     .card .value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .card .hint { color: var(--muted); font-size: 0.75rem; margin-top: 8px; }
+    .card .value.ok-text { color: var(--ok); }
+    .card .value.err-text { color: #ff6b6b; }
+    .card .value.small { font-size: 1.25rem; }
     .status { font-size: 0.85rem; margin-top: 12px; }
     .status.ok { color: var(--ok); }
     .status.err { color: #ff6b6b; }
@@ -85,7 +89,7 @@
 </head>
 <body>
   <h1>JStars Server Monitor</h1>
-  <p class="sub">로비 SignalR · 세션 토큰 · 매칭 큐 · 필드서버 인원</p>
+  <p class="sub">로비 SignalR · 매칭 · 필드서버 · Redis · 랭킹</p>
 
   <div class="toolbar">
     <input id="apiKey" type="password" placeholder="Monitoring API Key (선택)" style="min-width: 220px;" />
@@ -101,6 +105,16 @@
     <div class="card"><div class="label">PVP 매칭 대기</div><div class="value" id="pvpQueue">-</div></div>
     <div class="card"><div class="label">PVE 매칭 대기</div><div class="value" id="pveQueue">-</div></div>
     <div class="card"><div class="label">필드서버 총 인원</div><div class="value" id="fieldTotal">-</div></div>
+    <div class="card"><div class="label">Redis</div><div class="value" id="redisStatus">-</div></div>
+    <div class="card">
+      <div class="label">매칭 E2E 평균 대기</div>
+      <div class="value" id="matchLatency">-</div>
+      <div class="hint" id="matchLatencyHint">성공 MatchSuccess 기준 (누적)</div>
+    </div>
+    <div class="card">
+      <div class="label">PVP 랭킹 마지막 갱신</div>
+      <div class="value small" id="rankingRefresh">-</div>
+    </div>
   </div>
 
   <table>
@@ -149,6 +163,32 @@
         document.getElementById("pvpQueue").textContent = data.pvpMatchingQueue;
         document.getElementById("pveQueue").textContent = data.pveMatchingQueue;
         document.getElementById("fieldTotal").textContent = data.fieldServerTotalUsers;
+
+        const redisEl = document.getElementById("redisStatus");
+        if (data.redisConnected) {
+          redisEl.textContent = "Connected";
+          redisEl.className = "value ok-text";
+        } else {
+          redisEl.textContent = "Disconnected";
+          redisEl.className = "value err-text";
+        }
+
+        const latencyEl = document.getElementById("matchLatency");
+        const latencyHint = document.getElementById("matchLatencyHint");
+        if (data.matchLatencyAverageMs != null && data.matchLatencySampleCount > 0) {
+          latencyEl.textContent = Math.round(data.matchLatencyAverageMs) + " ms";
+          latencyHint.textContent = "샘플 " + data.matchLatencySampleCount + "건 (취소·실패 제외)";
+        } else {
+          latencyEl.textContent = "-";
+          latencyHint.textContent = "아직 집계 없음 (MatchSuccess 전송 후 누적)";
+        }
+
+        const rankingEl = document.getElementById("rankingRefresh");
+        if (data.rankingLastRefreshedUtc) {
+          rankingEl.textContent = new Date(data.rankingLastRefreshedUtc).toLocaleString();
+        } else {
+          rankingEl.textContent = "미갱신";
+        }
 
         const tbody = document.getElementById("fieldServersBody");
         tbody.innerHTML = "";

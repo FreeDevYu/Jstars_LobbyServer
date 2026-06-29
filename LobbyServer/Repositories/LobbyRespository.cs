@@ -81,7 +81,6 @@ namespace LobbyServer.Repositories
             return affected > 0;
         }
 
-        //단순 카운터 (win/total) → SQL 원자적 증가
         public async Task<PvpRecord?> IncrementPvpRecordAsync(long uid, bool isWin)
         {
             int winIncrement = isWin ? 1 : 0;
@@ -130,29 +129,23 @@ namespace LobbyServer.Repositories
 
         public async Task<NicknameChangeResult> NicknameChangeAsync(long uid, string newNickname, ItemSubCategory subcategory, long itemInstanceID)
         {
-            // 1. 익명 객체 대신 DynamicParameters를 사용해야 OUT 파라미터를 받을 수 있습니다.
             var parameters = new DynamicParameters();
 
-            // IN 파라미터 세팅
             parameters.Add("input_uid", uid);
             parameters.Add("input_new_nickname", newNickname);
             parameters.Add("input_subcategory", subcategory);
             parameters.Add("input_instance_id", itemInstanceID);
 
-            // 2. 핵심: OUT 파라미터를 받을 "빈 공간"을 세팅해서 같이 넘겨줍니다.
-            // SQL에서 INT로 선언했으므로 DbType.Int32를 사용합니다.
             parameters.Add("output_result", dbType: DbType.Int32, direction: ParameterDirection.Output);
 
             try
             {
-                // 3. 데이터를 반환하는 SELECT 쿼리가 아니므로 ExecuteAsync를 사용합니다.
                 await _db.Connection.ExecuteAsync(
                     "ChangeNickname",
                     parameters,
                     commandType: CommandType.StoredProcedure
                 );
 
-                // 4. 프로시저 실행이 끝난 후, OUT 파라미터 방에 담긴 값을 꺼내옵니다.
                 int result = parameters.Get<int>("output_result");
 
                 return (NicknameChangeResult)result; // (0: 실패, 1: 성공, 2: 형식오류, 3: 중복, 4: 티켓없음)

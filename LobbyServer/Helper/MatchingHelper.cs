@@ -5,6 +5,7 @@ using Google.Protobuf;
 using StackExchange.Redis;
 using System.Text.Json;
 using LobbyServer.Models;
+using LobbyServer.Services;
 
 namespace LobbyServer.Helper
 {
@@ -27,6 +28,7 @@ namespace LobbyServer.Helper
         private readonly IUserHelper _userHelper;
         private readonly IUserRespository _userRepository;
         private readonly IRedisHelper _redisHelper;
+        private readonly IMatchLatencyMetrics _matchLatencyMetrics;
         private readonly string _key = "MatchingQueue_ZSET";
         private readonly string _pveKey = "PveMatchingQueue_ZSET";
         private readonly string _fieldServerCurrentKey = "FIELD_SERVER_CURRENT_USER";
@@ -38,7 +40,8 @@ namespace LobbyServer.Helper
             IInventoryHelper inventoryHelper,
             ICharacterHelper characterHelper,
             IUserHelper userHelper,
-            IUserRespository userRepository)
+            IUserRespository userRepository,
+            IMatchLatencyMetrics matchLatencyMetrics)
         {
             _lobbyRespository = lobbyRespository;
             _inventoryHelper = inventoryHelper;
@@ -46,6 +49,7 @@ namespace LobbyServer.Helper
             _userHelper = userHelper;
             _userRepository = userRepository;
             _redisHelper = redisHelper;
+            _matchLatencyMetrics = matchLatencyMetrics;
         }
 
         public async Task<bool> EnqueueMatchingQueue(long uid)
@@ -54,6 +58,7 @@ namespace LobbyServer.Helper
 
             double score = await GetMatchingScoreAsync(uid);
             await _redisHelper.AddZSetAsync(_key, uid, score);
+            await _matchLatencyMetrics.RecordEnqueueAsync(uid);
             return true;
         }
 
@@ -63,17 +68,22 @@ namespace LobbyServer.Helper
 
             double score = await GetMatchingScoreAsync(uid);
             await _redisHelper.AddZSetAsync(_pveKey, uid, score);
+            await _matchLatencyMetrics.RecordEnqueueAsync(uid);
             return true;
         }
 
         public async Task<bool> CancelMatchingQueue(long uid)
         {
-            return await _redisHelper.RemoveZSetAsync(_key, uid);
+            bool removed = await _redisHelper.RemoveZSetAsync(_key, uid);
+            await _matchLatencyMetrics.CancelPendingAsync(uid);
+            return removed;
         }
 
         public async Task<bool> CancelPveMatchingQueue(long uid)
         {
-            return await _redisHelper.RemoveZSetAsync(_pveKey, uid);
+            bool removed = await _redisHelper.RemoveZSetAsync(_pveKey, uid);
+            await _matchLatencyMetrics.CancelPendingAsync(uid);
+            return removed;
         }
 
         public async Task CancelAllMatchingQueues(long uid)
@@ -115,10 +125,9 @@ namespace LobbyServer.Helper
 
         public async Task<bool> CreateRoomAsync(List<long> uidList, int teamCount, Protocol.GameModeType gameMode)
         {
-            //TODO
             int gameMapId = 1;
 
-            // 1. 가장 인원이 적은 서버 찾기 (로드밸런싱)
+            // 가장 인원이 적은 서버 찾기 (로드밸런싱)
             RedisValue[] serverList = await _redisHelper.GetZSetRangeAsync(
                 _fieldServerCurrentKey, start: 0, stop: 0, order: Order.Ascending);
 
@@ -127,14 +136,14 @@ namespace LobbyServer.Helper
 
             string targetServerName = serverList[0].ToString();
 
-            // 2. DTO 생성 및 맵 ID 세팅
+            // DTO 생성 및 맵 ID 세팅
             Protocol.GameRoomCreateDTO dto = new Protocol.GameRoomCreateDTO
             {
                 GameMapId = gameMapId,
                 GameMode = gameMode
             };
 
-            // 3. 팀 분배 및 PlayerInfo 객체 추가
+            // 팀 분배 및 PlayerInfo 객체 추가
             for (int i = 0; i < uidList.Count; i++)
             {
                 // teamCount가 1 이하면(개인전/데스매치) 모두 0, 아니면 1팀, 2팀... 순차 배분
@@ -145,7 +154,6 @@ namespace LobbyServer.Helper
                 }
                 else if (teamCount > 1)
                 {
-                    // 예: 6명, 2팀이면 1, 2, 1, 2, 1, 2 형태로 골고루 분배됩니다.
                     assignedTeamId = i % teamCount + 1;
                 }
 
@@ -156,10 +164,8 @@ namespace LobbyServer.Helper
                 });
             }
 
-            // 4. 직렬화 (MemoryStream 없이 간단하게 byte 배열로 변환)
             byte[] protoBytes = dto.ToByteArray();
 
-            // 5. Redis 인게임 서버 매칭 큐에 넣기
             string redisKey = $"MatchingQueue:{targetServerName}";
             long count = await _redisHelper.EnqueueKeyValueAsync(redisKey, protoBytes);
 

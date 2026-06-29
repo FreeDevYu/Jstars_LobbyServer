@@ -1,4 +1,7 @@
+using LobbyAPI.Models;
+using LobbyServer.Models;
 using StackExchange.Redis;
+using System.Text.Json;
 
 namespace LobbyServer.Services
 {
@@ -11,6 +14,10 @@ namespace LobbyServer.Services
         long PveMatchingQueue,
         IReadOnlyList<FieldServerUserInfo> FieldServers,
         int FieldServerTotalUsers,
+        bool RedisConnected,
+        double? MatchLatencyAverageMs,
+        long MatchLatencySampleCount,
+        DateTime? RankingLastRefreshedUtc,
         DateTime TimestampUtc);
 
     public interface IMonitoringService
@@ -28,11 +35,13 @@ namespace LobbyServer.Services
 
         private readonly IConnectionMultiplexer _redis;
         private readonly IDatabase _db;
+        private readonly IMatchLatencyMetrics _matchLatencyMetrics;
 
-        public MonitoringService(IConnectionMultiplexer redis)
+        public MonitoringService(IConnectionMultiplexer redis, IMatchLatencyMetrics matchLatencyMetrics)
         {
             _redis = redis;
             _db = redis.GetDatabase();
+            _matchLatencyMetrics = matchLatencyMetrics;
         }
 
         public async Task<MonitoringSummary> GetSummaryAsync()
@@ -42,10 +51,16 @@ namespace LobbyServer.Services
             var pvpTask = _db.SortedSetLengthAsync(PvpQueueKey);
             var pveTask = _db.SortedSetLengthAsync(PveQueueKey);
             var fieldServersTask = GetFieldServersAsync();
+            var latencyTask = _matchLatencyMetrics.GetStatsAsync();
+            var rankingMetaTask = _db.StringGetAsync(RankingConstants.MetaKey);
 
-            await Task.WhenAll(signalRTask, authTokenTask, pvpTask, pveTask, fieldServersTask);
+            await Task.WhenAll(signalRTask, authTokenTask, pvpTask, pveTask, fieldServersTask, latencyTask, rankingMetaTask);
 
             var fieldServers = await fieldServersTask;
+            var (sumMs, sampleCount) = await latencyTask;
+            double? averageMs = sampleCount > 0 ? (double)sumMs / sampleCount : null;
+            DateTime? rankingRefreshed = ParseRankingRefreshedAt(await rankingMetaTask);
+
             return new MonitoringSummary(
                 await signalRTask,
                 await authTokenTask,
@@ -53,7 +68,34 @@ namespace LobbyServer.Services
                 await pveTask,
                 fieldServers,
                 fieldServers.Sum(s => s.UserCount),
+                _redis.IsConnected,
+                averageMs,
+                sampleCount,
+                rankingRefreshed,
                 DateTime.UtcNow);
+        }
+
+        private static DateTime? ParseRankingRefreshedAt(RedisValue raw)
+        {
+            if (raw.IsNullOrEmpty)
+                return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(raw.ToString());
+                if (doc.RootElement.TryGetProperty("refreshedAt", out var prop) &&
+                    prop.TryGetDateTime(out DateTime refreshedAt))
+                {
+                    return refreshedAt.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(refreshedAt, DateTimeKind.Utc)
+                        : refreshedAt.ToUniversalTime();
+                }
+            }
+            catch (JsonException)
+            {
+            }
+
+            return null;
         }
 
         private async Task<IReadOnlyList<FieldServerUserInfo>> GetFieldServersAsync()
@@ -71,7 +113,8 @@ namespace LobbyServer.Services
 
         private async Task<long> CountKeysByPatternAsync(string pattern)
         {
-            long count = 0;
+            // 동일 Redis 인스턴스에 엔드포인트가 2개 잡히면(예: 127.0.0.1 + ::1) 키가 이중 집계됨
+            var uniqueKeys = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var endpoint in _redis.GetEndPoints())
             {
@@ -79,13 +122,13 @@ namespace LobbyServer.Services
                 if (!server.IsConnected || server.IsReplica)
                     continue;
 
-                await foreach (var _ in server.KeysAsync(pattern: pattern))
+                await foreach (var key in server.KeysAsync(pattern: pattern))
                 {
-                    count++;
+                    uniqueKeys.Add(key.ToString());
                 }
             }
 
-            return count;
+            return uniqueKeys.Count;
         }
     }
 }

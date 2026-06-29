@@ -1,5 +1,6 @@
 using LobbyServer.Helper;
 using LobbyServer.Hubs;
+using LobbyServer.Services;
 using Microsoft.AspNetCore.SignalR;
 using Protocol;
 using StackExchange.Redis;
@@ -12,6 +13,7 @@ namespace LobbyServer.BackgroundServices
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<SignalRHub> _hubContext;
         private readonly ILogger<PveMatchingRequestWorker> _logger;
+        private readonly IMatchLatencyMetrics _matchLatencyMetrics;
 
         private const string QueueKey = "PveMatchingQueue_ZSET";
         private const double MATCH_RANGE = 5.0;
@@ -23,12 +25,14 @@ namespace LobbyServer.BackgroundServices
             IConnectionMultiplexer redis,
             IServiceScopeFactory scopeFactory,
             IHubContext<SignalRHub> hubContext,
-            ILogger<PveMatchingRequestWorker> logger)
+            ILogger<PveMatchingRequestWorker> logger,
+            IMatchLatencyMetrics matchLatencyMetrics)
         {
             _redis = redis;
             _scopeFactory = scopeFactory;
             _hubContext = hubContext;
             _logger = logger;
+            _matchLatencyMetrics = matchLatencyMetrics;
 
             _matchingScript = MatchingLuaScripts.MatchPlayers;
         }
@@ -77,6 +81,7 @@ namespace LobbyServer.BackgroundServices
                             }
                             else
                             {
+                                await _matchLatencyMetrics.CancelPendingManyAsync(matchedUids);
                                 _logger.LogWarning(
                                     "[PVE 매칭 실패] UID: {Uids} (플레이어 데이터 캐싱 또는 방 생성 실패)",
                                     string.Join(", ", matchedUids));

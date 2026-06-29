@@ -18,6 +18,9 @@ public sealed class FieldTcpSession : IAsyncDisposable
     public int SentPackets { get; private set; }
     public int ReceivedPackets { get; private set; }
 
+    public bool IsConnected =>
+        _connected && (_receiveTask == null || !_receiveTask.IsCompleted);
+
     public async Task ConnectAsync(string ip, int port, CancellationToken cancellationToken = default)
     {
         Disconnect();
